@@ -565,6 +565,7 @@ void watchman_free_expression(watchman_expression_t *expr)
 		for (i = 0; i < expr->e.union_expr.nr; ++i) {
 			watchman_free_expression(expr->e.union_expr.clauses[i]);
 		}
+		free(expr->e.union_expr.clauses);
 		free(expr);
 		break;
 	case WATCHMAN_EXPR_TY_NOT:
@@ -576,7 +577,7 @@ void watchman_free_expression(watchman_expression_t *expr)
 		/* These are singletons; don't delete them */
 		break;
 	case WATCHMAN_EXPR_TY_SINCE:
-		if (expr->e.since_expr.t.since) {
+		if (!expr->e.since_expr.is_time_t) {
 			free(expr->e.since_expr.t.since);
 		}
 		free(expr);
@@ -589,9 +590,14 @@ void watchman_free_expression(watchman_expression_t *expr)
 	case WATCHMAN_EXPR_TY_IMATCH: /*-fallthrough*/
 	case WATCHMAN_EXPR_TY_PCRE: /*-fallthrough*/
 	case WATCHMAN_EXPR_TY_IPCRE: /*-fallthrough*/
+		free(expr->e.match_expr.match);
+		free(expr);
+		break;
 	case WATCHMAN_EXPR_TY_NAME: /*-fallthrough*/
 	case WATCHMAN_EXPR_TY_INAME:
-		free(expr->e.match_expr.match);
+		for (i = 0; i < expr->e.name_expr.nr; ++i) {
+			free(expr->e.name_expr.names[i]);
+		}
 		free(expr);
 		break;
 	case WATCHMAN_EXPR_TY_TYPE:

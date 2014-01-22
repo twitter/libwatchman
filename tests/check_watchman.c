@@ -132,6 +132,18 @@ START_TEST (test_watchman_watch)
 }
 END_TEST
 
+START_TEST (test_watchman_misc)
+{
+	watchman_expression_t *expressions[3];
+	expressions[0] = watchman_since_expression_time_t(0, 0);
+	expressions[1] = watchman_since_expression_time_t(1, 0);
+	expressions[2] = watchman_since_expression_time_t(2, 0);
+
+	watchman_expression_t *all;
+	all = watchman_allof_expression(3, expressions);
+	watchman_free_expression(all);
+}
+END_TEST
 
  Suite *
  watchman_suite (void)
@@ -143,6 +155,7 @@ END_TEST
    tcase_add_checked_fixture (tc_core, setup, teardown);
    tcase_add_test (tc_core, test_watchman_connect);
    tcase_add_test (tc_core, test_watchman_watch);
+   tcase_add_test (tc_core, test_watchman_misc);
    suite_add_tcase (s, tc_core);
 
    return s;
