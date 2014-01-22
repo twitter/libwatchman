@@ -1,0 +1,17 @@
+This is a C interface to watchman
+(https://www.github.com/facebook/watchman).
+
+Watchman is a wrapper around inotify, kevents, etc.  
+
+Using libwatchman is very straightforward: establish a connection with
+watchman_connect, do some commands, then disconnect with
+watchman_connection_close. These functions handle memory
+management for you.
+
+To set up a watch on a directoy, use watchman_ensure_watch.
+
+To make a query, first construct an expression using the
+watchman_*_expression functions, then use watchman_query.
+You have to free expressions yourself, using watchman_free_expression,
+but freeing an expression will free all of its child expressions.
+

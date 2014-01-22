@@ -1,0 +1,5 @@
+Twitter proprietary for now.
+
+Note: do not release this under the Apache license, as we need to use it 
+with git.  Git is gplv2 (only), and thus incompatible.  Use the MIT
+license (or, I guess, the GPL or LGPL).
