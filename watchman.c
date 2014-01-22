@@ -598,6 +598,7 @@ void watchman_free_expression(watchman_expression_t *expr)
 		for (i = 0; i < expr->e.name_expr.nr; ++i) {
 			free(expr->e.name_expr.names[i]);
 		}
+		free(expr->e.name_expr.names);
 		free(expr);
 		break;
 	case WATCHMAN_EXPR_TY_TYPE:
@@ -748,11 +749,10 @@ NAME_EXPR(INAME, iname)
 	{								\
 		assert(nr);						\
 		assert(names);						\
-		size_t sz = sizeof(char *);		\
-		watchman_expression_t* result = malloc (sz);		\
-		result->ty = WATCHMAN_EXPR_TY_##tyupper;		\
+		watchman_expression_t* result =				\
+			alloc_expr(WATCHMAN_EXPR_TY_##tyupper);		\
 		result->e.name_expr.nr = nr;				\
-		result->e.name_expr.names = malloc(nr * sz);		\
+		result->e.name_expr.names = malloc(nr * sizeof(char*));	\
 		int i;							\
 		for (i = 0; i < nr; ++i) {				\
 			result->e.name_expr.names[i] = strdup(names[i]); \
