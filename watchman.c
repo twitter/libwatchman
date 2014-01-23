@@ -845,12 +845,11 @@ void watchman_connection_close(watchman_connection_t *conn)
 	free(conn);
 }
 
-void watchman_free_error(watchman_error_t *error)
+void watchman_release_error(watchman_error_t *error)
 {
 	if (error->message) {
 		free(error->message);
 	}
-	free(error);
 }
 
 void watchman_free_watch_list(watchman_watch_list_t *list)

@@ -253,6 +253,8 @@ void watchman_free_query_result(watchman_query_result_t *res);
 
 void watchman_free_watch_list(watchman_watch_list_t *list);
 
+void watchman_release_error(watchman_error_t *error);
+
 void watchman_connection_close(watchman_connection_t *connection);
 
 
