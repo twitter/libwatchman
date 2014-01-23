@@ -27,6 +27,7 @@ enum watchman_fields {
 	WATCHMAN_FIELD_DEV = 0x00040000,
 	WATCHMAN_FIELD_NLINK = 0x00080000,
 	WATCHMAN_FIELD_NEWER = 0x00100000, /* corresponds to "new" */
+	WATCHMAN_FIELD_END = 0x00200000
 };
  
 typedef struct {

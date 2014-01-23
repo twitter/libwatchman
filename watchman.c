@@ -274,9 +274,7 @@ static char *basename_str[] = {
 
 static json_t *json_string_from_char(char c)
 {
-	char str[2];
-	str[0] = c;
-	str[1] = 0;
+	char str[2] = {c, 0};
 	return json_string(str);
 }
 
@@ -400,7 +398,7 @@ json_t *fields_to_json(int fields)
 	json_t *result = json_array();
 	int i = 0;
 	int mask;
-	for (mask = 1; mask <= WATCHMAN_FIELD_NEWER; mask *= 2) {
+	for (mask = 1; mask < WATCHMAN_FIELD_END; mask *= 2) {
 		if (fields & mask) {
 			json_array_append_new(result,
 					      json_string(fields_str[i]));
@@ -491,24 +489,35 @@ done:
 		stat->attr = json_real_value(attr);		\
 	}
 
+static int watchman_send(
+	watchman_connection_t *conn,
+	json_t *query,
+	watchman_error_t *error)
+{
+	int json_result = json_dumpf(query, conn->fp, JSON_COMPACT);
+	if (json_result) {
+		char *dump = json_dumps(query, 0);
+		watchman_err(error, "Failed to send watchman query %s",
+			     dump);
+		free(dump);
+		return 1;
+	}
+	fputc('\n', conn->fp);
+	return 0;
+}
+
 static watchman_query_result_t *watchman_query_json(
 	watchman_connection_t *conn,
 	json_t *query,
 	watchman_error_t *error)
 {
 
-	watchman_query_result_t* result = NULL;
-	watchman_query_result_t* res = NULL;
+	watchman_query_result_t *result = NULL;
+	watchman_query_result_t *res = NULL;
 
-	int json_result = json_dumpf(query, conn->fp, JSON_COMPACT);
-	if (json_result) {
-		char* dump = json_dumps(query, 0);
-		watchman_err(error, "Failed to send watchman query %s",
-			     dump);
-		free(dump);
+	if (watchman_send(conn, query, error)) {
 		return NULL;
 	}
-	fputc('\n', conn->fp);
 	/* parse the result */
 	json_t *obj = watchman_read(conn, error);
 	if (!obj) {
@@ -875,7 +884,7 @@ void watchman_free_query_result(watchman_query_result_t *result)
 	if (result->stats) {
 		int i;
 		for (i = 0; i < result->nr; ++i) {
-			watchman_dealloc_stat(&(result->stats[i]));
+			watchman_release_stat(&(result->stats[i]));
 		}
 		free(result->stats);
 	}
