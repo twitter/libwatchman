@@ -417,7 +417,8 @@ watchman_watch_list_t *watchman_watch_list(watchman_connection_t *conn,
 {
 
 	watchman_watch_list_t *res = NULL;
-	if (watchman_send_simple_cmd(conn, error, "watch-list", NULL)) {
+	watchman_watch_list_t *result = NULL;
+	if (watchman_send_simple_command(conn, error, "watch-list", NULL)) {
 		return NULL;
 	}
 
@@ -426,23 +427,29 @@ watchman_watch_list_t *watchman_watch_list(watchman_connection_t *conn,
 		return NULL;
 	}
 	JSON_ASSERT(json_is_object, obj, "Got bogus value from watch-list %s");
-	json_t* roots = json_object_get(obj, "roots");
+	json_t *roots = json_object_get(obj, "roots");
 	JSON_ASSERT(json_is_array, roots, "Got bogus value from watch-list %s");
 
 	res = malloc(sizeof (watchman_watch_list_t));
-	res->nr = json_array_size(roots);
-	res->roots = calloc(res->nr, sizeof(char *));
+	int nr = json_array_size(roots);
+	res->nr = 0;
+	res->roots = calloc(nr, sizeof(char *));
 	int i;
-	for (i = 0; i < res->nr; ++i) {
+	for (i = 0; i < nr; ++i) {
 		json_t *root = json_array_get(roots, i);
 		JSON_ASSERT(json_is_string, root,
 			    "Got non-string root from watch-list %s");
+		res->nr ++;
 		res->roots[i] = strdup(json_string_value(root));
 	}
-
+	result = res;
+	res = NULL;
 done:
+	if (res) {
+		watchman_free_watch_list(res);
+	}
 	json_decref(obj);
-	return res;
+	return result;
 }
 
 #define WRITE_BOOL_STAT(stat, statobj, attr)			\
@@ -514,16 +521,17 @@ static watchman_query_result_t *watchman_query_json(
 	json_t *files = json_object_get(obj, "files");
 	JSON_ASSERT(json_is_array, files, "Bad files %s");
 
-	res->nr = json_array_size(files);
-	res->stats = calloc(res->nr, sizeof(watchman_stat_t));
+	int nr = json_array_size(files);
+	res->stats = calloc(nr, sizeof(watchman_stat_t));
 
 	int i;
-	for (i = 0; i < res->nr; ++i) {
-		watchman_stat_t* stat = res->stats + i;
+	for (i = 0; i < nr; ++i) {
+		watchman_stat_t *stat = res->stats + i;
 		json_t *statobj = json_array_get(files, i);
 		if (json_is_string(statobj)) {
 			/* then hopefully we only requested names */
 			stat->name = strdup(json_string_value(statobj));
+			res->nr ++;
 			continue;
 		}
 
@@ -562,7 +570,7 @@ static watchman_query_result_t *watchman_query_json(
 		if (newer) {
 			stat->newer = json_is_true(newer);
 		}
-
+		res->nr ++;
 	}
 
 	json_t *version = json_object_get(obj, "version");
@@ -578,12 +586,11 @@ static watchman_query_result_t *watchman_query_json(
 	res->is_fresh_instance = json_is_true(fresh);
 
 	result = res;
-	goto good;
+	res = NULL;
 done:
 	if (res) {
 		watchman_free_query_result(res);
 	}
-good:
 	json_decref(obj);
 	return result;
 }
