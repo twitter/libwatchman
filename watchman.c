@@ -32,7 +32,7 @@ watchman_connection_t *watchman_sock_connect(watchman_error_t *error,
 
 	int fd;
 	if ( (fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-		watchman_err(error, "socket error %d", errno);
+		watchman_err(error, "Socket error %s", strerror(errno));
 		return NULL;
 	}
 
@@ -40,14 +40,15 @@ watchman_connection_t *watchman_sock_connect(watchman_error_t *error,
 	strncpy(addr.sun_path, sockname, sizeof(addr.sun_path)-1);
 
 	if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
-		watchman_err(error, "connect error %d", errno);
+		watchman_err(error, "Connect error %s", strerror(errno));
 		return NULL;
 	}
 
 	FILE *sockfp = fdopen(fd, "r+");
 	if (!sockfp) {
-		watchman_err(error, "Failed to connect to watchman socket %s.",
-			      sockname);
+		watchman_err(error,
+			     "Failed to connect to watchman socket %s: %s.",
+			     sockname, strerror(errno));
 		return NULL;
 	}
 	setlinebuf(sockfp);
@@ -63,8 +64,8 @@ watchman_connection_t *watchman_connect(watchman_error_t *error)
 	FILE *fp = popen("watchman get-sockname", "r");
 	if (!fp) {
 		watchman_err(error,
-			     "Could not watchman get-sockname: %d",
-			errno);
+			     "Could not run watchman get-sockname: %s",
+			     strerror(errno));
 		return NULL;
 	}
 	json_error_t jerror;
@@ -84,12 +85,12 @@ watchman_connection_t *watchman_connect(watchman_error_t *error)
 	json_t *sockname_obj = json_object_get(json, "sockname");
 	if (!sockname_obj) {
 		watchman_err(error, "Got bad JSON from watchman get-sockname:"
-			     " socket expected");
+			     " sockname element expected");
 		goto bad_json;
 	}
 	if (!json_is_string(sockname_obj)) {
 		watchman_err(error, "Got bad JSON from watchman get-sockname:"
-			     " socket is not string");
+			     " sockname is not string");
 		goto bad_json;
 	}
 	const char *sockname = json_string_value(sockname_obj);
