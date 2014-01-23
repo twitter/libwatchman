@@ -177,12 +177,18 @@ END_TEST
 
 START_TEST (test_watchman_misc)
 {
+	watchman_error_t error;
+	watchman_connection_t *conn = watchman_connect(&error);
+	ck_assert_msg(!watchman_watch(conn, test_dir, &error),
+		      error.message);
+
 	watchman_expression_t *expressions[8];
 	expressions[0] = watchman_since_expression_time_t(0, 0);
 	expressions[1] = watchman_since_expression_time_t(1, 0);
 	expressions[2] = watchman_since_expression("c:123:45", 0);
 	expressions[3] = watchman_exists_expression();
-	expressions[4] = watchman_not_expression(watchman_suffix_expression(".jsp"));
+	expressions[4] = watchman_not_expression(
+		watchman_suffix_expression(".jsp"));
 	expressions[5] = watchman_imatch_expression(".jsp", 0);
 
 	const char* names[] = { "morx", "fleem" };

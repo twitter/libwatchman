@@ -352,8 +352,8 @@ static json_t *to_json(const watchman_expression_t *expr)
 		arg = json_string_or_array(expr->e.name_expr.nr,
 			expr->e.name_expr.names);
 		json_array_append_new(result, arg);
-		if (expr->e.match_expr.basename) {
-			char *base = basename_str[expr->e.match_expr.basename];
+		if (expr->e.name_expr.basename) {
+			char *base = basename_str[expr->e.name_expr.basename];
 			json_array_append_new(result, json_string(base));
 		}
 		break;
