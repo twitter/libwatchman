@@ -189,6 +189,8 @@ watchman_expression_t* watchman_names_expression(int nr, const char **match, enu
 
 watchman_expression_t* watchman_inames_expression(int nr, const char **match, enum watchman_basename basename);
 
+watchman_expression_t* watchman_type_expression(char c);
+
 watchman_query_result_t *watchman_query(watchman_connection_t *connection, const char *fs_path, const watchman_expression_t *expr, int fields, watchman_error_t *error);
 
 void watchman_free_expression(watchman_expression_t *expr);

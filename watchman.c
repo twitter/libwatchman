@@ -763,3 +763,9 @@ NAME_EXPR(INAME, iname)
 NAMES_EXPR(NAME, name)
 NAMES_EXPR(INAME, iname)
 #undef NAMES_EXPR
+
+watchman_expression_t *watchman_type_expression(char c) {
+	watchman_expression_t *result = alloc_expr(WATCHMAN_EXPR_TY_TYPE);
+	result->e.type_expr.type = c;
+	return result;
+}
