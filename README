@@ -8,10 +8,17 @@ watchman_connect, do some commands, then disconnect with
 watchman_connection_close. These functions handle memory
 management for you.
 
-To set up a watch on a directoy, use watchman_ensure_watch.
+To set up a watch on a directoy, use watchman_watch.
 
 To make a query, first construct an expression using the
-watchman_*_expression functions, then use watchman_query.
-You have to free expressions yourself, using watchman_free_expression,
-but freeing an expression will free all of its child expressions.
+watchman_*_expression functions, then use watchman_do_query. It's OK
+to pass in a NULL value for the query parameter.  You have to free
+expressions yourself, using watchman_free_expression, but freeing an
+expression will free all of its child expressions.
 
+A word of warning: stat fields are only valid for results returned
+from watchman.  You can choose these results by specifying flags for
+the query.  If you do not specify flags for the query, then you will
+only get the default fields: name, exists, newer, size, mode
+
+Watchman never frees anything that it hasn't created.

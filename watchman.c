@@ -25,7 +25,8 @@ static void watchman_err(watchman_error_t *error,
 	va_end(argptr);
 }
 
-watchman_connection_t *watchman_sock_connect(watchman_error_t *error, const char* sockname)
+watchman_connection_t *watchman_sock_connect(watchman_error_t *error,
+					     const char* sockname)
 {
 	struct sockaddr_un addr = {};
 
@@ -132,7 +133,9 @@ static json_t *watchman_read(
 	int flags = JSON_DISABLE_EOF_CHECK;
 	json_t *result = json_loadf(conn->fp, flags, &jerror);
 	if (!result) {
-		watchman_err(error, "Got unparseable or empty result from watchman: %s", jerror.text);
+		watchman_err(error,
+			     "Can't parse result from watchman: %s",
+			     jerror.text);
 	}
 	if (fgetc(conn->fp) != '\n') {
 		watchman_err(error, "No newline at end of reply");
@@ -473,7 +476,7 @@ done:
 		stat->attr = json_real_value(attr);		\
 	}
 
-static watchman_query_result_t *watchman_do_query(
+static watchman_query_result_t *watchman_query_json(
 	watchman_connection_t *conn,
 	json_t *query,
 	watchman_error_t *error)
@@ -577,25 +580,85 @@ good:
 	return result;
 }
 
-watchman_query_result_t *watchman_query(watchman_connection_t *conn,
+watchman_query_t *watchman_query(char *since, char *suffix, char *path,
+				 int all, int fields, int64_t sync_timeout)
+{
+	watchman_query_t *result = calloc(1, sizeof(watchman_query_t));
+	if (since) {
+		result->since = strdup(since);
+	}
+	if (suffix) {
+		result->suffix = strdup(suffix);
+	}
+	if (path) {
+		result->path = strdup(path);
+	}
+	result->all = all;
+	result->fields = fields;
+	result->sync_timeout = sync_timeout;
+	return result;
+}
+
+void watchman_free_query(watchman_query_t *query) {
+	if (query->since) {
+		free(query->since);
+	}
+	if (query->suffix) {
+		free(query->suffix);
+	}
+	if (query->path) {
+		free(query->path);
+	}
+	free(query);
+}
+
+watchman_query_result_t *watchman_do_query(watchman_connection_t *conn,
 				      const char *fs_path,
+				      const watchman_query_t *query,
 				      const watchman_expression_t *expr,
-				      int fields,
 				      watchman_error_t *error)
 {
 
 	/* construct the json */
-	json_t *query = json_array();
-	json_array_append_new(query, json_string("query"));
-	json_array_append_new(query, json_string(fs_path));
+	json_t *json = json_array();
+	json_array_append_new(json, json_string("query"));
+	json_array_append_new(json, json_string(fs_path));
 	json_t *obj = json_object();
 	json_object_set_new(obj, "expression", to_json(expr));
-	json_object_set_new(obj, "fields", fields_to_json(fields));
-	json_array_append_new(query, obj);
+	if (query) {
+		if (query->fields) {
+			json_object_set_new(obj, "fields",
+					    fields_to_json(query->fields));
+		}
+		if (query->since) {
+			json_object_set_new(obj, "since",
+					    json_string(query->since));
+		}
+
+		if (query->suffix) {
+			json_object_set_new(obj, "suffix",
+					    json_string(query->suffix));
+		}
+
+		if (query->path) {
+			json_object_set_new(obj, "path",
+					    json_string(query->path));
+		}
+
+		if (query->all) {
+			json_object_set_new(obj, "all", json_string("all"));
+		}
+
+		if (query->sync_timeout >= 0) {
+			json_object_set_new(obj, "all",
+					    json_integer(query->sync_timeout));
+		}
+	}
+	json_array_append_new(json, obj);
 
 	/* do the query */
-	watchman_query_result_t *r = watchman_do_query(conn, query, error);
-	json_decref(query);
+	watchman_query_result_t *r = watchman_query_json(conn, json, error);
+	json_decref(json);
 	return r;
 }
 

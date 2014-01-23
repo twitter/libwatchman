@@ -148,6 +148,17 @@ typedef struct {
 	char **roots;
 } watchman_watch_list_t;
 
+typedef struct {
+	char *since;
+	char *suffix;
+	char *path;
+	int all;
+	int fields;
+
+	/* negative for unset */
+	int64_t sync_timeout;
+} watchman_query_t;
+
 struct watchman_expression_t {
 	enum watchman_expression_type ty;
 	union {
@@ -209,7 +220,9 @@ watchman_expression_t* watchman_inames_expression(int nr, char const **match, en
 
 watchman_expression_t* watchman_type_expression(char c);
 
-watchman_query_result_t *watchman_query(watchman_connection_t *connection, const char *fs_path, const watchman_expression_t *expr, int fields, watchman_error_t *error);
+watchman_query_result_t *watchman_do_query(watchman_connection_t *connection, const char *fs_path, const watchman_query_t *query, const watchman_expression_t *expr, watchman_error_t *error);
+
+watchman_query_t *watchman_query(char *since, char *suffix, char *path, int all, int fields, int64_t sync_timeout);
 
 void watchman_free_expression(watchman_expression_t *expr);
 

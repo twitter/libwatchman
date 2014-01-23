@@ -106,8 +106,7 @@ START_TEST (test_watchman_watch)
 	since = watchman_since_expression_time_t(0, 0);
 	/* we expect to get nothing back from this one */
 	watchman_query_result_t *result =
-		watchman_query(conn, test_dir, since, WATCHMAN_FIELD_NAME,
-			       &error);
+		watchman_do_query(conn, test_dir, NULL, since, &error);
 	ck_assert_int_eq(0, result->nr);
 	char* clock = strdup(result->clock);
 	watchman_free_query_result(result);
@@ -117,13 +116,15 @@ START_TEST (test_watchman_watch)
 
 	/* now that we have created a file, check again */
 	since = watchman_since_expression(clock, 0);
-	result = watchman_query(conn, test_dir, since,
-				WATCHMAN_FIELD_NAME | WATCHMAN_FIELD_CTIME_F,
-				&error);
+	int fields = WATCHMAN_FIELD_NAME | WATCHMAN_FIELD_CTIME_F;
+	watchman_query_t *query = watchman_query(NULL, NULL, NULL, 0,
+						 fields, 0);
+	result = watchman_do_query(conn, test_dir, query, since, &error);
 	ck_assert_msg(result != NULL, error.message);
 	ck_assert_int_eq(1, result->nr);
 	ck_assert_str_eq("morx", result->stats[0].name);
 	ck_assert(result->stats[0].ctime_f > 1390436718.0);
+	watchman_free_query(query);
 	watchman_free_query_result(result);
 	watchman_free_expression(since);
 	free(clock);
