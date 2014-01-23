@@ -141,6 +141,7 @@ START_TEST (test_watchman_watch)
 
 	/* now that we have created a file, check again */
 	since = watchman_since_expression(clock, 0);
+	free(clock);
 	int fields = WATCHMAN_FIELD_NAME | WATCHMAN_FIELD_CTIME_F;
 	watchman_query_t *query = watchman_query();
 	watchman_query_add_suffix(query, "jar");
@@ -164,10 +165,9 @@ START_TEST (test_watchman_watch)
 	ck_assert_msg(result != NULL, error.message);
 	ck_assert_int_eq(1, result->nr);
 
-
-
+	watchman_free_query(query);
+	watchman_free_query_result(result);
 	watchman_free_expression(since);
-	free(clock);
 
 	ck_assert_msg(!watchman_watch_del(conn, test_dir, &error),
 		      error.message);
