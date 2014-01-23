@@ -136,11 +136,12 @@ static json_t *watchman_read(
 		watchman_err(error,
 			     "Can't parse result from watchman: %s",
 			     jerror.text);
+		return NULL;
 	}
 	if (fgetc(conn->fp) != '\n') {
 		watchman_err(error, "No newline at end of reply");
 		json_decref(result);
-		result = NULL;
+		return NULL;
 	}
 	return result;
 }

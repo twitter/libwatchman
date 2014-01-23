@@ -20,25 +20,40 @@ void setup(void)
 	}
 }
 
-void teardown(void)
-{
-	DIR* dh = opendir(test_dir);
+int is_dir(char* path) {
+	struct stat statbuf;
+	stat(path, &statbuf);
+	return S_ISDIR(statbuf.st_mode);
+}
+
+void rmdir_recursive(char* dir) {
+	DIR* dh = opendir(dir);
 	struct dirent *cur;
-	char path[256 + L_tmpnam + 2];
-	int test_dir_len = strlen(test_dir);
-	strcpy(path, test_dir);
-	path[test_dir_len] = '/';
+	int dir_len = strlen(dir);
+	char path[256 + dir_len + 2];
+	strcpy(path, dir);
+	path[dir_len] = '/';
 	while (cur = readdir(dh)) {
-		if (strcmp(cur->d_name, ".") || strcmp(cur->d_name, "..")) {
-			strcpy(path + test_dir_len + 1, cur->d_name);
-			unlink(path);
+		if (strcmp(cur->d_name, ".") && strcmp(cur->d_name, "..")) {
+			strcpy(path + dir_len + 1, cur->d_name);
+			if (is_dir(path)) {
+				rmdir_recursive(path);
+				rmdir(path);
+			} else {
+				unlink(path);
+			}
 		}
 	}
 	closedir(dh);
-	if (rmdir(test_dir)) {
+	if (rmdir(dir)) {
 		perror("Couldn't remove test directory");
 		exit(1);
 	}
+}
+
+void teardown(void)
+{
+	rmdir_recursive(test_dir);
 }
 
 START_TEST (test_watchman_connect)
@@ -94,6 +109,16 @@ void create_file(char* filename, char* body) {
 
 }
 
+void create_dir(char* dirname) {
+	int test_dir_len = strlen(test_dir);
+	char* path = malloc(test_dir_len + strlen(dirname) + 2);
+	strcpy(path, test_dir);
+	path[test_dir_len] = '/';
+	strcpy(path + test_dir_len + 1, dirname);
+	ck_assert(mkdir(path, 0700) == 0);
+	free(path);
+}
+
 START_TEST (test_watchman_watch)
 {
 	watchman_error_t error;
@@ -125,8 +150,22 @@ START_TEST (test_watchman_watch)
 	ck_assert_int_eq(1, result->nr);
 	ck_assert_str_eq("morx.jar", result->stats[0].name);
 	ck_assert(result->stats[0].ctime_f > 1390436718.0);
-	watchman_free_query(query);
 	watchman_free_query_result(result);
+	watchman_free_query(query);
+
+	/* try with a file inside a directory, to check paths */
+
+	create_dir("fleem");
+	create_file("fleem/fleem.jar", "body");
+
+	query = watchman_query();
+	watchman_query_add_path(query, "fleem", 0);
+	result = watchman_do_query(conn, test_dir, query, since, &error);
+	ck_assert_msg(result != NULL, error.message);
+	ck_assert_int_eq(1, result->nr);
+
+
+
 	watchman_free_expression(since);
 	free(clock);
 
