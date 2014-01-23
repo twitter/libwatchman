@@ -194,7 +194,6 @@ int watchman_watch_del(watchman_connection_t *connection, const char *path, watc
 
 watchman_watch_list_t* watchman_watch_list(watchman_connection_t *connection, watchman_error_t* error);
 
-
 watchman_expression_t* watchman_since_expression(const char *since, enum watchman_clockspec spec);
 
 watchman_expression_t* watchman_since_expression_time_t(time_t time, enum watchman_clockspec spec);

@@ -26,7 +26,7 @@ static void watchman_err(watchman_error_t *error,
 }
 
 watchman_connection_t *watchman_sock_connect(watchman_error_t *error,
-					     const char* sockname)
+					     const char *sockname)
 {
 	struct sockaddr_un addr = {};
 
@@ -100,9 +100,9 @@ done:
 	return conn;
 }
 
-static int watchman_send_simple_cmd(watchman_connection_t *conn,
-				    watchman_error_t *error,
-				    ...)
+static int watchman_send_simple_command(watchman_connection_t *conn,
+					watchman_error_t *error,
+					...)
 {
 
 	int result = 0;
@@ -148,7 +148,8 @@ static json_t *watchman_read(
 
 static int watchman_read_and_handle_errors(
 	watchman_connection_t *conn,
-	watchman_error_t *error) {
+	watchman_error_t *error)
+{
 
 	json_t *obj = watchman_read(conn, error);
 	if (!obj) {
@@ -179,7 +180,7 @@ int watchman_watch(
 	const char *path,
 	watchman_error_t *error)
 {
-	if (watchman_send_simple_cmd(conn, error, "watch", path, NULL)) {
+	if (watchman_send_simple_command(conn, error, "watch", path, NULL)) {
 		return 1;
 	}
 	if (watchman_read_and_handle_errors(conn, error)) {
@@ -193,7 +194,8 @@ int watchman_watch_del(
 	const char *path,
 	watchman_error_t *error)
 {
-	if (watchman_send_simple_cmd(conn, error, "watch-del", path, NULL)) {
+	if (watchman_send_simple_command(conn, error, "watch-del", path,
+					 NULL)) {
 		return 1;
 	}
 	if (watchman_read_and_handle_errors(conn, error)) {
@@ -210,7 +212,7 @@ static watchman_expression_t *alloc_expr(
 	return expr;
 }
 
-watchman_expression_t * watchman_since_expression(
+watchman_expression_t *watchman_since_expression(
 	const char *since,
 	enum watchman_clockspec spec)
 {
@@ -222,7 +224,7 @@ watchman_expression_t * watchman_since_expression(
 	return expr;
 }
 
-watchman_expression_t * watchman_since_expression_time_t(
+watchman_expression_t *watchman_since_expression_time_t(
 	time_t time,
 	enum watchman_clockspec spec)
 {
@@ -273,7 +275,7 @@ static json_t *json_string_from_char(char c)
 	return json_string(str);
 }
 
-static json_t *json_string_or_array(int nr, char** items)
+static json_t *json_string_or_array(int nr, char **items)
 {
 	if (nr == 1) {
 		return json_string(items[0]);
@@ -284,7 +286,6 @@ static json_t *json_string_or_array(int nr, char** items)
 		json_array_append_new(result, json_string(items[i]));
 	}
 	return result;
-	
 }
 
 static json_t *since_to_json(json_t *result, const watchman_expression_t *expr)
@@ -301,6 +302,7 @@ static json_t *since_to_json(json_t *result, const watchman_expression_t *expr)
 		json_array_append_new(result, json_string(clockspec));
 	}
 }
+
 static json_t *to_json(const watchman_expression_t *expr)
 {
 	json_t *result = json_array();
@@ -330,7 +332,6 @@ static json_t *to_json(const watchman_expression_t *expr)
 
 	case WATCHMAN_EXPR_TY_SINCE:
 		since_to_json(result, expr);
-
 		break;
 	case WATCHMAN_EXPR_TY_SUFFIX:
 		json_array_append_new(result,
@@ -350,7 +351,7 @@ static json_t *to_json(const watchman_expression_t *expr)
 	case WATCHMAN_EXPR_TY_NAME: /*-fallthrough*/
 	case WATCHMAN_EXPR_TY_INAME:
 		arg = json_string_or_array(expr->e.name_expr.nr,
-			expr->e.name_expr.names);
+					   expr->e.name_expr.names);
 		json_array_append_new(result, arg);
 		if (expr->e.name_expr.basename) {
 			char *base = basename_str[expr->e.name_expr.basename];
@@ -403,9 +404,9 @@ json_t *fields_to_json(int fields)
 	return result;
 }
 
-#define JSON_ASSERT(cond, condarg, msg) \
+#define JSON_ASSERT(cond, condarg, msg)					\
 	if (!cond(condarg)) {						\
-		char* dump = json_dumps(condarg, 0);			\
+		char *dump = json_dumps(condarg, 0);			\
 		watchman_err(error, msg,				\
 			     dump);					\
 		free(dump);						\
@@ -639,7 +640,8 @@ void watchman_query_add_suffix(watchman_query_t *query, char *suffix)
 	query->nr_suffixes ++;
 }
 
-void watchman_query_add_path(watchman_query_t *query, char *path, int depth) {
+void watchman_query_add_path(watchman_query_t *query, char *path, int depth)
+{
 	if (query->cap_paths == query->nr_paths) {
 		if (query->nr_paths == 0) {
 			query->cap_paths = 10;
@@ -654,7 +656,8 @@ void watchman_query_add_path(watchman_query_t *query, char *path, int depth) {
 	query->nr_paths ++;
 }
 
-void watchman_query_set_since_oclock(watchman_query_t *query, char *since) {
+void watchman_query_set_since_oclock(watchman_query_t *query, char *since)
+{
 	if (query->since_is_str) {
 		free(query->s.str);
 	}
@@ -662,7 +665,8 @@ void watchman_query_set_since_oclock(watchman_query_t *query, char *since) {
 	query->s.str = strdup(since);
 }
 
-void watchman_query_set_since_time_t(watchman_query_t *query, time_t since) {
+void watchman_query_set_since_time_t(watchman_query_t *query, time_t since)
+{
 	if (query->since_is_str) {
 		free(query->s.str);
 	}
@@ -670,11 +674,13 @@ void watchman_query_set_since_time_t(watchman_query_t *query, time_t since) {
 	query->s.time = since;
 }
 
-void watchman_query_set_fields(watchman_query_t *query, int fields) {
+void watchman_query_set_fields(watchman_query_t *query, int fields)
+{
 	query->fields = fields;
 }
 
-static json_t *json_path(watchman_pathspec_t *spec) {
+static json_t *json_path(watchman_pathspec_t *spec)
+{
 	if (spec->depth == -1) {
 		return json_string(spec->path);
 	}
@@ -686,12 +692,11 @@ static json_t *json_path(watchman_pathspec_t *spec) {
 }
 
 watchman_query_result_t *watchman_do_query(watchman_connection_t *conn,
-				      const char *fs_path,
-				      const watchman_query_t *query,
-				      const watchman_expression_t *expr,
-				      watchman_error_t *error)
+					   const char *fs_path,
+					   const watchman_query_t *query,
+					   const watchman_expression_t *expr,
+					   watchman_error_t *error)
 {
-
 	/* construct the json */
 	json_t *json = json_array();
 	json_array_append_new(json, json_string("query"));
@@ -716,7 +721,7 @@ watchman_query_result_t *watchman_do_query(watchman_connection_t *conn,
 
 		if (query->nr_suffixes) {
 			/* Note that even if you have only one suffix,
-			 watchman requires this to be an array. */
+			   watchman requires this to be an array. */
 			int i;
 			json_t *suffixes = json_array();
 			for (i = 0; i < query->nr_suffixes; ++i) {
@@ -821,8 +826,9 @@ void watchman_connection_close(watchman_connection_t *conn)
 
 void watchman_free_error(watchman_error_t *error)
 {
-	if (error->message)
+	if (error->message) {
 		free(error->message);
+	}
 	free(error);
 }
 
@@ -851,7 +857,6 @@ void watchman_free_query_result(watchman_query_result_t *result)
 	if (result->clock) {
 		free(result->clock);
 	}
-
 	if (result->stats) {
 		int i;
 		for (i = 0; i < result->nr; ++i) {
@@ -862,19 +867,19 @@ void watchman_free_query_result(watchman_query_result_t *result)
 	free(result);
 }
 
-watchman_expression_t* watchman_not_expression(
-	watchman_expression_t* expression)
+watchman_expression_t *watchman_not_expression(
+	watchman_expression_t *expression)
 {
 	return ;
 }
 
 #define UNION_EXPR(tyupper, tylower) \
-	watchman_expression_t* watchman_##tylower##_expression(		\
-		int nr, watchman_expression_t** expressions) {		\
+	watchman_expression_t *watchman_##tylower##_expression(		\
+		int nr, watchman_expression_t **expressions) {		\
 		assert(nr);						\
 		assert(expressions);					\
 		size_t sz = sizeof(watchman_expression_t);		\
-		watchman_expression_t* result = malloc (sz);		\
+		watchman_expression_t *result = malloc (sz);		\
 		result->ty = WATCHMAN_EXPR_TY_##tyupper;		\
 		result->e.union_expr.nr = nr;				\
 		result->e.union_expr.clauses = malloc(nr * sz);		\
@@ -889,7 +894,7 @@ UNION_EXPR(ANYOF, anyof)
 #define STATIC_EXPR(ty, tylower)					\
 	static watchman_expression_t ty##_EXPRESSION =			\
 	{ WATCHMAN_EXPR_TY_##ty };					\
-	watchman_expression_t* watchman_##tylower##_expression(void)	\
+	watchman_expression_t *watchman_##tylower##_expression(void)	\
 	{								\
 		return &ty##_EXPRESSION;				\
 	}
@@ -901,7 +906,8 @@ STATIC_EXPR(EXISTS, exists)
 
 #undef static_expr
 
-watchman_expression_t* watchman_suffix_expression(const char *suffix) {
+watchman_expression_t *watchman_suffix_expression(const char *suffix)
+{
 	assert(suffix);
 	watchman_expression_t *expr = alloc_expr(WATCHMAN_EXPR_TY_SUFFIX);
 	expr->e.suffix_expr.suffix = strdup(suffix);
@@ -909,7 +915,7 @@ watchman_expression_t* watchman_suffix_expression(const char *suffix) {
 }
 
 #define MATCH_EXPR(tyupper, tylower)					\
-	watchman_expression_t* watchman_##tylower##_expression		\
+	watchman_expression_t *watchman_##tylower##_expression		\
 	(const char *match, enum watchman_basename basename)		\
 	{								\
 		assert(match);						\
@@ -928,7 +934,7 @@ MATCH_EXPR(IPCRE, ipcre)
 #undef MATCH_EXPR
 
 #define NAME_EXPR(tyupper, tylower)					\
-	watchman_expression_t* watchman_##tylower##_expression(		\
+	watchman_expression_t *watchman_##tylower##_expression(		\
 		const char *name, enum watchman_basename basename)	\
 	{								\
 	assert(name);							\
@@ -941,13 +947,13 @@ NAME_EXPR(INAME, iname)
 
 
 #define NAMES_EXPR(tyupper, tylower)					\
-	watchman_expression_t* watchman_##tylower##s_expression(	\
+	watchman_expression_t *watchman_##tylower##s_expression(	\
 		int nr, const char **names,				\
 		enum watchman_basename basename)			\
 	{								\
 		assert(nr);						\
 		assert(names);						\
-		watchman_expression_t* result =				\
+		watchman_expression_t *result =				\
 			alloc_expr(WATCHMAN_EXPR_TY_##tyupper);		\
 		result->e.name_expr.nr = nr;				\
 		result->e.name_expr.names = malloc(nr * sizeof(char*));	\
@@ -962,7 +968,8 @@ NAMES_EXPR(NAME, name)
 NAMES_EXPR(INAME, iname)
 #undef NAMES_EXPR
 
-watchman_expression_t *watchman_type_expression(char c) {
+watchman_expression_t *watchman_type_expression(char c)
+{
 	watchman_expression_t *result = alloc_expr(WATCHMAN_EXPR_TY_TYPE);
 	result->e.type_expr.type = c;
 	return result;
