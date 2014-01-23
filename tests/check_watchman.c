@@ -194,10 +194,19 @@ START_TEST (test_watchman_misc)
 	const char* names[] = { "morx", "fleem" };
 	expressions[6] = watchman_names_expression(2, names, 0);
 	expressions[7] = watchman_type_expression('D');
+	expressions[8] = watchman_true_expression();
 
 	watchman_expression_t *all;
 	all = watchman_allof_expression(8, expressions);
+	watchman_query_result_t* result =
+		watchman_do_query(conn, test_dir, NULL, all, &error);
+	ck_assert_msg(result != NULL, error.message);
+	watchman_free_query_result(result);
 	watchman_free_expression(all);
+
+	ck_assert_msg(!watchman_watch_del(conn, test_dir, &error),
+		      error.message);
+	watchman_connection_close(conn);
 }
 END_TEST
 

@@ -613,33 +613,39 @@ void watchman_free_query(watchman_query_t *query)
 {
 	if (query->since_is_str) {
 		free(query->s.str);
+		query->s.str = 0;
 	}
 	if (query->nr_suffixes) {
 		int i;
 		for (i = 0; i < query->nr_suffixes; ++i) {
 			free(query->suffixes[i]);
+			query->suffixes[i] = 0;
 		}
 		free(query->suffixes);
+		query->suffixes = 0;
 	}
 	if (query->nr_paths) {
 		int i;
 		for (i = 0; i < query->nr_paths; ++i) {
 			free(query->paths[i].path);
+			query->paths[i].path = 0;
 		}
 		free(query->paths);
+		query->paths = 0;
 	}
 	free(query);
 }
 
 void watchman_query_add_suffix(watchman_query_t *query, char *suffix)
 {
+	assert(suffix);
 	if (query->cap_suffixes == query->nr_suffixes) {
 		if (query->nr_suffixes == 0) {
 			query->cap_suffixes = 10;
 		} else {
 			query->cap_suffixes *= 2;
 		}
-		int new_size = sizeof(char *) * query->cap_paths;
+		int new_size = sizeof(char *) * query->cap_suffixes;
 		query->suffixes = realloc(query->suffixes, new_size);
 	}
 	query->suffixes[query->nr_suffixes] = strdup(suffix);
@@ -879,7 +885,9 @@ void watchman_free_query_result(watchman_query_result_t *result)
 watchman_expression_t *watchman_not_expression(
 	watchman_expression_t *expression)
 {
-	return ;
+	watchman_expression_t *not_expr = alloc_expr(WATCHMAN_EXPR_TY_NOT);
+	not_expr->e.not_expr.clause = expression;
+	return not_expr;
 }
 
 #define UNION_EXPR(tyupper, tylower) \
