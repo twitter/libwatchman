@@ -21,4 +21,9 @@ from watchman.  You can choose these results by specifying flags for
 the query.  If you do not specify flags for the query, then you will
 only get the default fields: name, exists, newer, size, mode
 
-Watchman never frees anything that it hasn't created.
+Memory management:
+
+Watchman makes copies of all strings it has been given. Using the
+watchman_free_* functions will free these (as well as any other data
+that watchman has allocated).  Watchman never frees anything that it
+hasn't created.

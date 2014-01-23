@@ -215,7 +215,7 @@ watchman_expression_t * watchman_since_expression(
 {
 	assert(since);
 	watchman_expression_t *expr = alloc_expr(WATCHMAN_EXPR_TY_SINCE);
-	expr->e.since_expr.is_time_t = 0;
+	expr->e.since_expr.is_str = 1;
 	expr->e.since_expr.t.since = strdup(since);
 	expr->e.since_expr.clockspec = spec;
 	return expr;
@@ -226,7 +226,7 @@ watchman_expression_t * watchman_since_expression_time_t(
 	enum watchman_clockspec spec)
 {
 	watchman_expression_t *expr = alloc_expr(WATCHMAN_EXPR_TY_SINCE);
-	expr->e.since_expr.is_time_t = 1;
+	expr->e.since_expr.is_str = 0;
 	expr->e.since_expr.t.time = time;
 	expr->e.since_expr.clockspec = spec;
 	return expr;
@@ -288,12 +288,12 @@ static json_t *json_string_or_array(int nr, char** items)
 
 static json_t *since_to_json(json_t *result, const watchman_expression_t *expr)
 {
-	if (expr->e.since_expr.is_time_t) {
-		json_array_append_new(result,
-				      json_integer(expr->e.since_expr.t.time));
-	} else {
+	if (expr->e.since_expr.is_str) {
 		json_array_append_new(result,
 				      json_string(expr->e.since_expr.t.since));
+	} else {
+		json_array_append_new(result,
+				      json_integer(expr->e.since_expr.t.time));
 	}
 	if (expr->e.since_expr.clockspec) {
 		char *clockspec = ty_str[expr->e.since_expr.clockspec];
@@ -501,6 +501,13 @@ static watchman_query_result_t *watchman_query_json(
 	}
 	JSON_ASSERT(json_is_object, obj, "Failed to send watchman query %s");
 
+	json_t *jerror = json_object_get(obj, "error");
+	if (jerror) {
+		watchman_err(error, "Error result from watchman: %s",
+			     json_string_value(jerror));
+		goto done;
+	}
+
 	res = calloc(1, sizeof(watchman_query_result_t));
 
 	json_t *files = json_object_get(obj, "files");
@@ -580,36 +587,94 @@ good:
 	return result;
 }
 
-watchman_query_t *watchman_query(char *since, char *suffix, char *path,
-				 int all, int fields, int64_t sync_timeout)
+watchman_query_t *watchman_query(void)
 {
 	watchman_query_t *result = calloc(1, sizeof(watchman_query_t));
-	if (since) {
-		result->since = strdup(since);
-	}
-	if (suffix) {
-		result->suffix = strdup(suffix);
-	}
-	if (path) {
-		result->path = strdup(path);
-	}
-	result->all = all;
-	result->fields = fields;
-	result->sync_timeout = sync_timeout;
+	result->sync_timeout = -1;
 	return result;
 }
 
-void watchman_free_query(watchman_query_t *query) {
-	if (query->since) {
-		free(query->since);
+void watchman_free_query(watchman_query_t *query)
+{
+	if (query->since_is_str) {
+		free(query->s.str);
 	}
-	if (query->suffix) {
-		free(query->suffix);
+	if (query->nr_suffixes) {
+		int i;
+		for (i = 0; i < query->nr_suffixes; ++i) {
+			free(query->suffixes[i]);
+		}
+		free(query->suffixes);
 	}
-	if (query->path) {
-		free(query->path);
+	if (query->nr_paths) {
+		int i;
+		for (i = 0; i < query->nr_paths; ++i) {
+			free(query->paths[i].path);
+		}
+		free(query->paths);
 	}
 	free(query);
+}
+
+void watchman_query_add_suffix(watchman_query_t *query, char *suffix)
+{
+	if (query->cap_suffixes == query->nr_suffixes) {
+		if (query->nr_suffixes == 0) {
+			query->cap_suffixes = 10;
+		} else {
+			query->cap_suffixes *= 2;
+		}
+		int new_size = sizeof(char *) * query->cap_paths;
+		query->suffixes = realloc(query->suffixes, new_size);
+	}
+	query->suffixes[query->nr_suffixes] = strdup(suffix);
+	query->nr_suffixes ++;
+}
+
+void watchman_query_add_path(watchman_query_t *query, char *path, int depth) {
+	if (query->cap_paths == query->nr_paths) {
+		if (query->nr_paths == 0) {
+			query->cap_paths = 10;
+		} else {
+			query->cap_paths *= 2;
+		}
+		int new_size = sizeof(watchman_pathspec_t) * query->cap_paths;
+		query->paths = realloc(query->paths, new_size);
+	}
+	query->paths[query->nr_paths].path = strdup(path);
+	query->paths[query->nr_paths].depth = depth;
+	query->nr_paths ++;
+}
+
+void watchman_query_set_since_oclock(watchman_query_t *query, char *since) {
+	if (query->since_is_str) {
+		free(query->s.str);
+	}
+	query->since_is_str = 1;
+	query->s.str = strdup(since);
+}
+
+void watchman_query_set_since_time_t(watchman_query_t *query, time_t since) {
+	if (query->since_is_str) {
+		free(query->s.str);
+	}
+	query->since_is_str = 1;
+	query->s.time = since;
+}
+
+void watchman_query_set_fields(watchman_query_t *query, int fields) {
+	query->fields = fields;
+}
+
+static json_t *json_path(watchman_pathspec_t *spec) {
+	if (spec->depth == -1) {
+		return json_string(spec->path);
+	}
+
+	json_t *obj = json_object();
+	json_object_set_new(obj, "depth", json_integer(spec->depth));
+	json_object_set_new(obj, "path", json_string(spec->path));
+	return obj;
 }
 
 watchman_query_result_t *watchman_do_query(watchman_connection_t *conn,
@@ -630,19 +695,38 @@ watchman_query_result_t *watchman_do_query(watchman_connection_t *conn,
 			json_object_set_new(obj, "fields",
 					    fields_to_json(query->fields));
 		}
-		if (query->since) {
-			json_object_set_new(obj, "since",
-					    json_string(query->since));
+
+		if (query->s.time) {
+			if (query->since_is_str) {
+				json_object_set_new(obj, "since",
+						    json_string(query->s.str));
+			} else {
+				json_t *since = json_integer(query->s.time);
+				json_object_set_new(obj, "since", since);
+			}
 		}
 
-		if (query->suffix) {
-			json_object_set_new(obj, "suffix",
-					    json_string(query->suffix));
+		if (query->nr_suffixes) {
+			/* Note that even if you have only one suffix,
+			 watchman requires this to be an array. */
+			int i;
+			json_t *suffixes = json_array();
+			for (i = 0; i < query->nr_suffixes; ++i) {
+				json_array_append_new(
+					suffixes,
+					json_string(query->suffixes[i]));
+			}
+			json_object_set_new(obj, "suffix", suffixes);
 		}
-
-		if (query->path) {
-			json_object_set_new(obj, "path",
-					    json_string(query->path));
+		if (query->nr_paths) {
+			int i;
+			json_t *paths = json_array();
+			for (i = 0; i < query->nr_paths; ++i) {
+				json_array_append_new(
+					paths,
+					json_path(&query->paths[i]));
+			}
+			json_object_set_new(obj, "path", paths);
 		}
 
 		if (query->all) {
@@ -683,7 +767,7 @@ void watchman_free_expression(watchman_expression_t *expr)
 		/* These are singletons; don't delete them */
 		break;
 	case WATCHMAN_EXPR_TY_SINCE:
-		if (!expr->e.since_expr.is_time_t) {
+		if (expr->e.since_expr.is_str) {
 			free(expr->e.since_expr.t.since);
 		}
 		free(expr);
@@ -797,7 +881,7 @@ UNION_EXPR(ANYOF, anyof)
 #define STATIC_EXPR(ty, tylower)					\
 	static watchman_expression_t ty##_EXPRESSION =			\
 	{ WATCHMAN_EXPR_TY_##ty };					\
-	watchman_expression_t* watchman_##tylower##_expression()	\
+	watchman_expression_t* watchman_##tylower##_expression(void)	\
 	{								\
 		return &ty##_EXPRESSION;				\
 	}

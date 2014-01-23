@@ -73,7 +73,7 @@ enum watchman_basename {
 typedef struct watchman_expression_t watchman_expression_t;
 
 struct watchman_since_expr {
-	int is_time_t;
+	int is_str;
 	union {
 		char* since;
 		time_t time;
@@ -149,9 +149,22 @@ typedef struct {
 } watchman_watch_list_t;
 
 typedef struct {
-	char *since;
-	char *suffix;
+	int depth;
 	char *path;
+} watchman_pathspec_t;
+
+typedef struct {
+	int since_is_str;
+	union {
+		char* str;
+		time_t time;
+	} s;
+	int nr_suffixes;
+	int cap_suffixes;
+	char **suffixes;
+	int nr_paths;
+	int cap_paths;
+	watchman_pathspec_t *paths;
 	int all;
 	int fields;
 
@@ -192,13 +205,13 @@ watchman_expression_t* watchman_allof_expression(int nr, watchman_expression_t**
 
 watchman_expression_t* watchman_anyof_expression(int nr, watchman_expression_t** expressions);
 
-watchman_expression_t* watchman_empty_expression();
+watchman_expression_t* watchman_empty_expression(void);
 
-watchman_expression_t* watchman_true_expression();
+watchman_expression_t* watchman_true_expression(void);
 
-watchman_expression_t* watchman_false_expression();
+watchman_expression_t* watchman_false_expression(void);
 
-watchman_expression_t* watchman_exists_expression();
+watchman_expression_t* watchman_exists_expression(void);
 
 watchman_expression_t* watchman_suffix_expression(const char *suffix);
 
@@ -222,7 +235,17 @@ watchman_expression_t* watchman_type_expression(char c);
 
 watchman_query_result_t *watchman_do_query(watchman_connection_t *connection, const char *fs_path, const watchman_query_t *query, const watchman_expression_t *expr, watchman_error_t *error);
 
-watchman_query_t *watchman_query(char *since, char *suffix, char *path, int all, int fields, int64_t sync_timeout);
+watchman_query_t *watchman_query(void);
+
+void watchman_query_add_suffix(watchman_query_t *query, char *suffix);
+
+void watchman_query_add_path(watchman_query_t *query, char *path, int depth);
+
+void watchman_query_set_since_oclock(watchman_query_t *query, char *since);
+
+void watchman_query_set_since_time_t(watchman_query_t *query, time_t since);
+
+void watchman_query_set_fields(watchman_query_t *query, int fields);
 
 void watchman_free_expression(watchman_expression_t *expr);
 
