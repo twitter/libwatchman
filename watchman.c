@@ -622,25 +622,25 @@ void watchman_free_query(watchman_query_t *query)
 {
 	if (query->since_is_str) {
 		free(query->s.str);
-		query->s.str = 0;
+		query->s.str = NULL;
 	}
 	if (query->nr_suffixes) {
 		int i;
 		for (i = 0; i < query->nr_suffixes; ++i) {
 			free(query->suffixes[i]);
-			query->suffixes[i] = 0;
+			query->suffixes[i] = NULL;
 		}
 		free(query->suffixes);
-		query->suffixes = 0;
+		query->suffixes = NULL;
 	}
 	if (query->nr_paths) {
 		int i;
 		for (i = 0; i < query->nr_paths; ++i) {
 			free(query->paths[i].path);
-			query->paths[i].path = 0;
+			query->paths[i].path = NULL;
 		}
 		free(query->paths);
-		query->paths = 0;
+		query->paths = NULL;
 	}
 	free(query);
 }
@@ -857,10 +857,10 @@ void watchman_free_watch_list(watchman_watch_list_t *list)
 	int i;
 	for (i = 0; i < list->nr; ++i) {
 		free(list->roots[i]);
-		list->roots[i] = 0;
+		list->roots[i] = NULL;
 	}
 	free(list->roots);
-	list->roots = 0;
+	list->roots = NULL;
 	free(list);
 }
 
@@ -869,6 +869,7 @@ static void watchman_release_stat(watchman_stat_t *stat)
 {
 	if (stat->name) {
 		free(stat->name);
+		stat->name = NULL;
 	}
 }
 
@@ -876,9 +877,11 @@ void watchman_free_query_result(watchman_query_result_t *result)
 {
 	if (result->version) {
 		free(result->version);
+		result->version = NULL;
 	}
 	if (result->clock) {
 		free(result->clock);
+		result->clock = NULL;
 	}
 	if (result->stats) {
 		int i;
@@ -886,6 +889,7 @@ void watchman_free_query_result(watchman_query_result_t *result)
 			watchman_release_stat(&(result->stats[i]));
 		}
 		free(result->stats);
+		result->stats = NULL;
 	}
 	free(result);
 }
