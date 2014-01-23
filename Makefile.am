@@ -5,3 +5,5 @@ libwatchman_1_0_la_SOURCES = watchman.c
 libwatchman_1_0_la_LDFLAGS=-module -avoid-version -shared -ljansson
 
 lib_LTLIBRARIES = libwatchman-1.0.la
+
+include_HEADERS = watchman.h
