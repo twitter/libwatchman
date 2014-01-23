@@ -768,7 +768,7 @@ watchman_query_result_t *watchman_do_query(watchman_connection_t *conn,
 		}
 
 		if (query->sync_timeout >= 0) {
-			json_object_set_new(obj, "all",
+			json_object_set_new(obj, "sync_timeout",
 					    json_integer(query->sync_timeout));
 		}
 	}
