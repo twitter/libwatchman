@@ -236,6 +236,7 @@ watchman_expression_t *watchman_since_expression_time_t(
 	return expr;
 }
 
+/* corresponds to enum watchman_expression_type */
 static char *ty_str [] = {
 	"allof",
 	"anyof",
@@ -255,13 +256,16 @@ static char *ty_str [] = {
 	"exists"
 };
 
+/* corresponds to enum watchman_clockspec */
 static char *clockspec_str[] = {
 	NULL,
 	"oclock",
+	"cclock",
 	"mtime",
 	"ctime"
 };
 
+/* corresponds to enum watchman_basename */
 static char *basename_str[] = {
 	NULL,
 	"basename",
@@ -366,7 +370,8 @@ static json_t *to_json(const watchman_expression_t *expr)
 	return result;
 }
 
-static char* fields_str[] = {
+/* corresponds to enum watchman_fields */
+static char *fields_str[] = {
 	"name",
 	"exists",
 	"cclock",
@@ -838,12 +843,15 @@ void watchman_free_watch_list(watchman_watch_list_t *list)
 	int i;
 	for (i = 0; i < list->nr; ++i) {
 		free(list->roots[i]);
+		list->roots[i] = 0;
 	}
 	free(list->roots);
+	list->roots = 0;
 	free(list);
 }
 
-static void watchman_dealloc_stat(watchman_stat_t *stat)
+/* Not a _free_ function, since stats are allocated as a block. */
+static void watchman_release_stat(watchman_stat_t *stat)
 {
 	if (stat->name) {
 		free(stat->name);

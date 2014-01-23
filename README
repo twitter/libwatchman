@@ -1,6 +1,9 @@
 This is a C interface to watchman
 (https://www.github.com/facebook/watchman).
 
+You'll need jansson installed in order to use it, and check installed
+to run the tests.
+
 Watchman is a wrapper around inotify, kevents, etc.  
 
 Using libwatchman is very straightforward: establish a connection with
