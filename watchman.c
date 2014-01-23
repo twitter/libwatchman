@@ -283,7 +283,7 @@ static json_t *json_string_or_array(int nr, char** items)
 	
 }
 
-static json_t *since_to_json(json_t *result, const watchman_expression_t *expr) 
+static json_t *since_to_json(json_t *result, const watchman_expression_t *expr)
 {
 	if (expr->e.since_expr.is_time_t) {
 		json_array_append_new(result,
@@ -335,7 +335,7 @@ static json_t *to_json(const watchman_expression_t *expr)
 	case WATCHMAN_EXPR_TY_MATCH: /*-fallthrough*/
 	case WATCHMAN_EXPR_TY_IMATCH: /*-fallthrough*/
 	case WATCHMAN_EXPR_TY_PCRE: /*-fallthrough*/
-	case WATCHMAN_EXPR_TY_IPCRE: 
+	case WATCHMAN_EXPR_TY_IPCRE:
 		json_array_append_new(result,
 				      json_string(expr->e.match_expr.match));
 		if (expr->e.match_expr.basename) {
@@ -441,6 +441,38 @@ done:
 	return res;
 }
 
+#define WRITE_BOOL_STAT(stat, statobj, attr)			\
+	json_t *attr = json_object_get(statobj, #attr);		\
+	if (attr) {						\
+		JSON_ASSERT(json_is_boolean, attr,		\
+			    #attr " is not boolean");		\
+		stat->attr = json_is_true(attr);		\
+	}
+
+#define WRITE_INT_STAT(stat, statobj, attr)			\
+	json_t *attr = json_object_get(statobj, #attr);		\
+	if (attr) {						\
+		JSON_ASSERT(json_is_integer, attr,		\
+			    #attr " is not an integer");	\
+		stat->attr = json_integer_value(attr);		\
+	}
+
+#define WRITE_STR_STAT(stat, statobj, attr)			\
+	json_t *attr = json_object_get(statobj, #attr);		\
+	if (attr) {						\
+		JSON_ASSERT(json_is_string, attr,		\
+			    #attr " is not an integer");	\
+		stat->attr = strdup(json_string_value(attr));	\
+	}
+
+#define WRITE_FLOAT_STAT(stat, statobj, attr)			\
+	json_t *attr = json_object_get(statobj, #attr);		\
+	if (attr) {						\
+		JSON_ASSERT(json_is_real, attr,		\
+			    #attr " is not an integer");	\
+		stat->attr = json_real_value(attr);		\
+	}
+
 static watchman_query_result_t *watchman_do_query(
 	watchman_connection_t *conn,
 	json_t *query,
@@ -490,25 +522,36 @@ static watchman_query_result_t *watchman_do_query(
 		JSON_ASSERT(json_is_string, name, "name must be string: %s");
 		stat->name = strdup(json_string_value(name));
 
-		json_t *exists = json_object_get(statobj, "exists");
-		if (exists) {
-			stat->exists = json_is_true(exists);
-		}
+		WRITE_BOOL_STAT(stat, statobj, exists);
+		WRITE_INT_STAT(stat, statobj, ctime);
+		WRITE_INT_STAT(stat, statobj, ctime_ms);
+		WRITE_INT_STAT(stat, statobj, ctime_us);
+		WRITE_INT_STAT(stat, statobj, ctime_ns);
+		WRITE_INT_STAT(stat, statobj, dev);
+		WRITE_INT_STAT(stat, statobj, gid);
+		WRITE_INT_STAT(stat, statobj, ino);
+		WRITE_INT_STAT(stat, statobj, mode);
+		WRITE_INT_STAT(stat, statobj, mtime);
+		WRITE_INT_STAT(stat, statobj, mtime_ms);
+		WRITE_INT_STAT(stat, statobj, mtime_us);
+		WRITE_INT_STAT(stat, statobj, mtime_ns);
+		WRITE_INT_STAT(stat, statobj, nlink);
+		WRITE_INT_STAT(stat, statobj, size);
+		WRITE_INT_STAT(stat, statobj, uid);
 
-		json_t *mode = json_object_get(statobj, "mode");
-		if (mode) {
-			stat->mode = json_integer_value(mode);
-		}
+		WRITE_STR_STAT(stat, statobj, cclock);
+		WRITE_STR_STAT(stat, statobj, oclock);
 
+		WRITE_FLOAT_STAT(stat, statobj, ctime_f);
+		WRITE_FLOAT_STAT(stat, statobj, mtime_f);
+
+		/* the one we have to do manually because we don't
+		   want to use the name "new" */
 		json_t *newer = json_object_get(statobj, "new");
 		if (newer) {
 			stat->newer = json_is_true(newer);
 		}
 
-		json_t *size = json_object_get(statobj, "size");
-		if (size) {
-			stat->newer = json_integer_value(size);
-		}
 	}
 
 	json_t *version = json_object_get(obj, "version");
@@ -694,7 +737,7 @@ UNION_EXPR(ANYOF, anyof)
 	watchman_expression_t* watchman_##tylower##_expression()	\
 	{								\
 		return &ty##_EXPRESSION;				\
-	} 
+	}
 
 STATIC_EXPR(EMPTY, empty)
 STATIC_EXPR(TRUE, true)

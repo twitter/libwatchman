@@ -2,6 +2,7 @@
 #define WATCHMAN_H
 
 #include <stdio.h>
+#include <stdint.h>
 #include <time.h>
 
 enum watchman_fields {
@@ -110,9 +111,26 @@ struct watchman_union_expr {
 
 typedef struct {
 	int exists;
+	time_t ctime;
+	int64_t ctime_ms;
+	int64_t ctime_us;
+	int64_t ctime_ns;
+	double ctime_f;
+	int dev;
+	int gid;
+	int ino;
 	int mode;
+	time_t mtime;
+	int64_t mtime_ms;
+	int64_t mtime_us;
+	int64_t mtime_ns;
+	double mtime_f;
 	int newer;
+	int nlink;
+	int uid;
 	char *name;
+	char *oclock;
+	char *cclock;
 	size_t size;
 } watchman_stat_t;
 
@@ -185,9 +203,9 @@ watchman_expression_t* watchman_name_expression(const char *match, enum watchman
 
 watchman_expression_t* watchman_iname_expression(const char *match, enum watchman_basename basename);
 
-watchman_expression_t* watchman_names_expression(int nr, const char **match, enum watchman_basename basename);
+watchman_expression_t* watchman_names_expression(int nr, char const **match, enum watchman_basename basename);
 
-watchman_expression_t* watchman_inames_expression(int nr, const char **match, enum watchman_basename basename);
+watchman_expression_t* watchman_inames_expression(int nr, char const **match, enum watchman_basename basename);
 
 watchman_expression_t* watchman_type_expression(char c);
 
