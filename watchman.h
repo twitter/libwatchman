@@ -31,7 +31,7 @@ enum watchman_fields {
 };
  
 typedef struct {
-	FILE* fp;
+	FILE *fp;
 } watchman_connection_t;
 
 enum watchman_expression_type {

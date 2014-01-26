@@ -70,7 +70,7 @@ watchman_connection_t *watchman_connect(watchman_error_t *error)
 	}
 	json_error_t jerror;
 	json_t *json = json_loadf(fp, 0, &jerror);
-	fclose(fp);
+	pclose(fp);
 	if (!json) {
 		watchman_err(error,
 			     "Got bad JSON from watchman get-sockname: %s",
