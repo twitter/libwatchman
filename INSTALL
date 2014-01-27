@@ -12,6 +12,8 @@ without warranty of any kind.
 Basic Installation
 ==================
 
+   To start, run libtoolize && aclocal && autoconf && autoheader && automake --add-missing.  Then follow the following instructions.
+
    Briefly, the shell commands `./configure; make; make install' should
 configure, build, and install this package.  The following
 more-detailed instructions are generic; see the `README' file for
