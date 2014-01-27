@@ -71,7 +71,7 @@ enum watchman_basename {
 	WATCHMAN_BASENAME_WHOLENAME
 };
 
-typedef struct watchman_expression_t watchman_expression_t;
+typedef struct watchman_expression watchman_expression_t;
 
 struct watchman_since_expr {
 	int is_str;
@@ -173,7 +173,7 @@ typedef struct {
 	int64_t sync_timeout;
 } watchman_query_t;
 
-struct watchman_expression_t {
+struct watchman_expression {
 	enum watchman_expression_type ty;
 	union {
 		struct watchman_union_expr union_expr;
