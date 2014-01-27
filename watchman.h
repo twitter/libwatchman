@@ -54,7 +54,7 @@ enum watchman_expression_type {
 };
 
 typedef struct {
-	char* message;
+	char *message;
 } watchman_error_t;
 
 enum watchman_clockspec {
@@ -76,24 +76,24 @@ typedef struct watchman_expression watchman_expression_t;
 struct watchman_since_expr {
 	int is_str;
 	union {
-		char* since;
+		char *since;
 		time_t time;
 	} t;
 	enum watchman_clockspec clockspec;
 };
 
 struct watchman_suffix_expr {
-	char* suffix;
+	char *suffix;
 };
 
 struct watchman_match_expr {
-	char* match;
+	char *match;
 	enum watchman_basename basename;
 };
 
 struct watchman_name_expr {
 	int nr;
-	char** names;
+	char **names;
 	enum watchman_basename basename;
 };
 
@@ -157,7 +157,7 @@ typedef struct {
 typedef struct {
 	int since_is_str;
 	union {
-		char* str;
+		char *str;
 		time_t time;
 	} s;
 	int nr_suffixes;
@@ -193,45 +193,45 @@ int watchman_watch(watchman_connection_t *connection, const char *path, watchman
 
 int watchman_watch_del(watchman_connection_t *connection, const char *path, watchman_error_t *error);
 
-watchman_watch_list_t* watchman_watch_list(watchman_connection_t *connection, watchman_error_t* error);
+watchman_watch_list_t *watchman_watch_list(watchman_connection_t *connection, watchman_error_t *error);
 
-watchman_expression_t* watchman_since_expression(const char *since, enum watchman_clockspec spec);
+watchman_expression_t *watchman_since_expression(const char *since, enum watchman_clockspec spec);
 
-watchman_expression_t* watchman_since_expression_time_t(time_t time, enum watchman_clockspec spec);
+watchman_expression_t *watchman_since_expression_time_t(time_t time, enum watchman_clockspec spec);
 
-watchman_expression_t* watchman_not_expression(watchman_expression_t* expression);
+watchman_expression_t *watchman_not_expression(watchman_expression_t *expression);
 
-watchman_expression_t* watchman_allof_expression(int nr, watchman_expression_t** expressions);
+watchman_expression_t *watchman_allof_expression(int nr, watchman_expression_t* *expressions);
 
-watchman_expression_t* watchman_anyof_expression(int nr, watchman_expression_t** expressions);
+watchman_expression_t *watchman_anyof_expression(int nr, watchman_expression_t* *expressions);
 
-watchman_expression_t* watchman_empty_expression(void);
+watchman_expression_t *watchman_empty_expression(void);
 
-watchman_expression_t* watchman_true_expression(void);
+watchman_expression_t *watchman_true_expression(void);
 
-watchman_expression_t* watchman_false_expression(void);
+watchman_expression_t *watchman_false_expression(void);
 
-watchman_expression_t* watchman_exists_expression(void);
+watchman_expression_t *watchman_exists_expression(void);
 
-watchman_expression_t* watchman_suffix_expression(const char *suffix);
+watchman_expression_t *watchman_suffix_expression(const char *suffix);
 
-watchman_expression_t* watchman_match_expression(const char *match, enum watchman_basename basename);
+watchman_expression_t *watchman_match_expression(const char *match, enum watchman_basename basename);
 
-watchman_expression_t* watchman_imatch_expression(const char *match, enum watchman_basename basename);
+watchman_expression_t *watchman_imatch_expression(const char *match, enum watchman_basename basename);
 
-watchman_expression_t* watchman_pcre_expression(const char *match, enum watchman_basename basename);
+watchman_expression_t *watchman_pcre_expression(const char *match, enum watchman_basename basename);
 
-watchman_expression_t* watchman_ipcre_expression(const char *match, enum watchman_basename basename);
+watchman_expression_t *watchman_ipcre_expression(const char *match, enum watchman_basename basename);
 
-watchman_expression_t* watchman_name_expression(const char *match, enum watchman_basename basename);
+watchman_expression_t *watchman_name_expression(const char *match, enum watchman_basename basename);
 
-watchman_expression_t* watchman_iname_expression(const char *match, enum watchman_basename basename);
+watchman_expression_t *watchman_iname_expression(const char *match, enum watchman_basename basename);
 
-watchman_expression_t* watchman_names_expression(int nr, char const **match, enum watchman_basename basename);
+watchman_expression_t *watchman_names_expression(int nr, char const **match, enum watchman_basename basename);
 
-watchman_expression_t* watchman_inames_expression(int nr, char const **match, enum watchman_basename basename);
+watchman_expression_t *watchman_inames_expression(int nr, char const **match, enum watchman_basename basename);
 
-watchman_expression_t* watchman_type_expression(char c);
+watchman_expression_t *watchman_type_expression(char c);
 
 watchman_query_result_t *watchman_do_query(watchman_connection_t *connection, const char *fs_path, const watchman_query_t *query, const watchman_expression_t *expr, watchman_error_t *error);
 
