@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <time.h>
+#include <sys/types.h>
+
 
 enum watchman_fields {
 	WATCHMAN_FIELD_NAME = 0x00000001,
@@ -120,8 +122,8 @@ typedef struct {
 	int64_t ctime_us;
 	int64_t ctime_ns;
 	double ctime_f;
-	int dev;
-	int gid;
+	dev_t dev;
+	gid_t gid;
 	int ino;
 	int mode;
 	time_t mtime;
@@ -131,7 +133,7 @@ typedef struct {
 	double mtime_f;
 	int newer;
 	int nlink;
-	int uid;
+	uid_t uid;
 	char *name;
 	char *oclock;
 	char *cclock;
