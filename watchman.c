@@ -37,7 +37,7 @@ watchman_connection_t *watchman_sock_connect(watchman_error_t *error,
 	}
 
 	addr.sun_family = AF_UNIX;
-	strncpy(addr.sun_path, sockname, sizeof(addr.sun_path)-1);
+	strncpy(addr.sun_path, sockname, sizeof(addr.sun_path) - 1);
 
 	if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
 		watchman_err(error, "Connect error %s", strerror(errno));
