@@ -11,6 +11,10 @@
 #include <jansson.h>
 
 static void watchman_err(watchman_error_t *error,
+			 char *message, ...)
+	__attribute__((format (printf, 2, 3)));
+
+static void watchman_err(watchman_error_t *error,
 			  char *message, ...)
 {
 	va_list argptr;
