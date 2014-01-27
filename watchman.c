@@ -906,7 +906,7 @@ watchman_expression_t *watchman_not_expression(
 	return not_expr;
 }
 
-static inline watchman_expression_t* watchman_union_expression(
+static watchman_expression_t* watchman_union_expression(
 	enum watchman_expression_type ty,
 	int nr,
 	watchman_expression_t** expressions)
@@ -922,11 +922,15 @@ static inline watchman_expression_t* watchman_union_expression(
   return result;
 }
 
-watchman_expression_t* watchman_allof_expression(int nr, watchman_expression_t** expressions) {
+watchman_expression_t* watchman_allof_expression(
+	int nr,
+	watchman_expression_t** expressions) {
   return watchman_union_expression(WATCHMAN_EXPR_TY_ALLOF, nr, expressions);
 }
 
-watchman_expression_t* watchman_anyof(int nr, watchman_expression_t** expressions) {
+watchman_expression_t* watchman_anyof_expression(
+	int nr,
+	watchman_expression_t** expressions) {
   return watchman_union_expression(WATCHMAN_EXPR_TY_ANYOF, nr, expressions);
 }
 
@@ -943,7 +947,7 @@ STATIC_EXPR(TRUE, true)
 STATIC_EXPR(FALSE, false)
 STATIC_EXPR(EXISTS, exists)
 
-#undef static_expr
+#undef STATIC_EXPR
 
 watchman_expression_t *watchman_suffix_expression(const char *suffix)
 {
