@@ -110,6 +110,9 @@ struct watchman_union_expr {
 	watchman_expression_t **clauses;
 };
 
+/* These are the possible fields that can be returned by watchman
+   query.  Only fields that you request will be set (if you don't
+   request any, then watchman's default will be used). */
 typedef struct {
 	int exists;
 	time_t ctime;
