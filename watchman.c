@@ -902,23 +902,29 @@ watchman_expression_t *watchman_not_expression(
 	return not_expr;
 }
 
-#define UNION_EXPR(tyupper, tylower) \
-	watchman_expression_t *watchman_##tylower##_expression(		\
-		int nr, watchman_expression_t **expressions) {		\
-		assert(nr);						\
-		assert(expressions);					\
-		size_t sz = sizeof(watchman_expression_t);		\
-		watchman_expression_t *result = malloc (sz);		\
-		result->ty = WATCHMAN_EXPR_TY_##tyupper;		\
-		result->e.union_expr.nr = nr;				\
-		result->e.union_expr.clauses = malloc(nr * sz);		\
-		memcpy(result->e.union_expr.clauses, expressions, nr * sz); \
-		return result;						\
+static inline watchman_expression_t* watchman_union_expression(
+	enum watchman_expression_type ty,
+	int nr,
+	watchman_expression_t** expressions)
+{
+  assert(nr);
+  assert(expressions);
+  size_t sz = sizeof(watchman_expression_t);
+  watchman_expression_t* result = malloc(sz);
+  result->ty = ty;
+  result->e.union_expr.nr = nr;
+  result->e.union_expr.clauses = malloc(nr * sz);
+  memcpy(result->e.union_expr.clauses, expressions, nr * sz);
+  return result;
 }
 
-UNION_EXPR(ALLOF, allof)
-UNION_EXPR(ANYOF, anyof)
-#undef UNION_EXPR
+watchman_expression_t* watchman_allof_expression(int nr, watchman_expression_t** expressions) {
+  return watchman_union_expression(WATCHMAN_EXPR_TY_ALLOF, nr, expressions);
+}
+
+watchman_expression_t* watchman_anyof(int nr, watchman_expression_t** expressions) {
+  return watchman_union_expression(WATCHMAN_EXPR_TY_ANYOF, nr, expressions);
+}
 
 #define STATIC_EXPR(ty, tylower)					\
 	static watchman_expression_t ty##_EXPRESSION =			\
