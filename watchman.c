@@ -480,14 +480,14 @@ done:
 #define WRITE_STR_STAT(stat, statobj, attr)                             \
     json_t *attr = json_object_get(statobj, #attr);                     \
     if (attr) {                                                         \
-        JSON_ASSERT(json_is_string, attr, #attr " is not an integer");  \
+        JSON_ASSERT(json_is_string, attr, #attr " is not a string");    \
         stat->attr = strdup(json_string_value(attr));                   \
     }
 
 #define WRITE_FLOAT_STAT(stat, statobj, attr)                           \
     json_t *attr = json_object_get(statobj, #attr);                     \
     if (attr) {                                                         \
-        JSON_ASSERT(json_is_real, attr, #attr " is not an integer");    \
+        JSON_ASSERT(json_is_real, attr, #attr " is not a float");       \
         stat->attr = json_real_value(attr);                             \
     }
 
