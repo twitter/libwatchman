@@ -265,6 +265,8 @@ watchman_free_expression(struct watchman_expression *expr);
 void
 watchman_free_query_result(struct watchman_query_result *res);
 void
+watchman_free_query(struct watchman_query *query);
+void
 watchman_free_watch_list(struct watchman_watch_list *list);
 void
 watchman_release_error(struct watchman_error *error);

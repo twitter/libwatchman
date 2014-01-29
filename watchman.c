@@ -115,7 +115,7 @@ watchman_send_simple_command(struct watchman_connection *conn,
     va_list argptr;
     va_start(argptr, error);
     char *arg;
-    while (arg = va_arg(argptr, char *)) {
+    while ((arg = va_arg(argptr, char *))) {
         json_array_append_new(cmd_array, json_string(arg));
     }
     int json_result = json_dumpf(cmd_array, conn->fp, JSON_COMPACT);
@@ -290,7 +290,7 @@ json_string_or_array(int nr, char **items)
     return result;
 }
 
-static json_t *
+static void
 since_to_json(json_t *result, const struct watchman_expression *expr)
 {
     if (expr->e.since_expr.is_str) {
@@ -299,7 +299,7 @@ since_to_json(json_t *result, const struct watchman_expression *expr)
         json_array_append_new(result, json_integer(expr->e.since_expr.t.time));
     }
     if (expr->e.since_expr.clockspec) {
-        char *clockspec = ty_str[expr->e.since_expr.clockspec];
+        char *clockspec = clockspec_str[expr->e.since_expr.clockspec];
         json_array_append_new(result, json_string(clockspec));
     }
 }
@@ -466,28 +466,28 @@ done:
 #define WRITE_BOOL_STAT(stat, statobj, attr)                            \
     json_t *attr = json_object_get(statobj, #attr);                     \
     if (attr) {                                                         \
-        JSON_ASSERT(json_is_boolean, attr, #attr " is not boolean");    \
+        JSON_ASSERT(json_is_boolean, attr, #attr " is not boolean: %s");\
         stat->attr = json_is_true(attr);                                \
     }
 
 #define WRITE_INT_STAT(stat, statobj, attr)                             \
     json_t *attr = json_object_get(statobj, #attr);                     \
     if (attr) {                                                         \
-        JSON_ASSERT(json_is_integer, attr, #attr " is not an integer"); \
+        JSON_ASSERT(json_is_integer, attr, #attr " is not an int: %s"); \
         stat->attr = json_integer_value(attr);                          \
     }
 
 #define WRITE_STR_STAT(stat, statobj, attr)                             \
     json_t *attr = json_object_get(statobj, #attr);                     \
     if (attr) {                                                         \
-        JSON_ASSERT(json_is_string, attr, #attr " is not a string");    \
+        JSON_ASSERT(json_is_string, attr, #attr " is not a string: %s");\
         stat->attr = strdup(json_string_value(attr));                   \
     }
 
 #define WRITE_FLOAT_STAT(stat, statobj, attr)                           \
     json_t *attr = json_object_get(statobj, #attr);                     \
     if (attr) {                                                         \
-        JSON_ASSERT(json_is_real, attr, #attr " is not a float");       \
+        JSON_ASSERT(json_is_real, attr, #attr " is not a float: %s");   \
         stat->attr = json_real_value(attr);                             \
     }
 

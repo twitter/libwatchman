@@ -39,7 +39,7 @@ rmdir_recursive(char *dir)
     char path[256 + dir_len + 2];
     strcpy(path, dir);
     path[dir_len] = '/';
-    while (cur = readdir(dh)) {
+    while ((cur = readdir(dh))) {
         if (strcmp(cur->d_name, ".") && strcmp(cur->d_name, "..")) {
             strcpy(path + dir_len + 1, cur->d_name);
             if (is_dir(path)) {
