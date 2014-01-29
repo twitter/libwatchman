@@ -1,6 +1,6 @@
 AC_INIT([watchman], [2.9.3], [], [watchman])
 AC_CANONICAL_TARGET
-AM_INIT_AUTOMAKE([dist-bzip2 subdir-objects])
+AM_INIT_AUTOMAKE([dist-bzip2 subdir-objects foreign])
 AC_CONFIG_MACRO_DIR([m4])
 
 CFLAGS="$CFLAGS -std=c99 -D_POSIX_SOURCE -D_BSD_SOURCE"
