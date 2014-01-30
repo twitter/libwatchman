@@ -1,6 +1,7 @@
 #ifndef LIBWATCHMAN_WATCHMAN_H_
 #define LIBWATCHMAN_WATCHMAN_H_
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <time.h>
@@ -29,7 +30,8 @@ enum watchman_fields {
     WATCHMAN_FIELD_DEV = 0x00040000,
     WATCHMAN_FIELD_NLINK = 0x00080000,
     WATCHMAN_FIELD_NEWER = 0x00100000,  /* corresponds to "new" */
-    WATCHMAN_FIELD_END = 0x00200000
+    WATCHMAN_FIELD_MODE = 0x00200000,
+    WATCHMAN_FIELD_END = 0x00400000
 };
 
 struct watchman_connection {
@@ -162,6 +164,7 @@ struct watchman_pathspec {
 struct watchman_query {
     unsigned since_is_str:1;
     unsigned all:1;
+    unsigned empty_on_fresh:1;
     union {
         char *str;
         time_t time;
@@ -260,6 +263,9 @@ void
 watchman_query_set_since_time_t(struct watchman_query *query, time_t since);
 void
 watchman_query_set_fields(struct watchman_query *query, int fields);
+void
+watchman_query_set_empty_on_fresh(struct watchman_query *query,
+				  bool empty_on_fresh);
 void
 watchman_free_expression(struct watchman_expression *expr);
 void

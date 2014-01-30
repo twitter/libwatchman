@@ -397,7 +397,8 @@ static char *fields_str[] = {
     "ino",
     "dev",
     "nlink",
-    "new"
+    "new",
+    "mode"
 };
 
 json_t *
@@ -705,6 +706,13 @@ watchman_query_set_fields(struct watchman_query *query, int fields)
     query->fields = fields;
 }
 
+void
+watchman_query_set_empty_on_fresh(struct watchman_query *query,
+                                  bool empty_on_fresh)
+{
+    query->empty_on_fresh = empty_on_fresh;
+}
+
 static json_t *
 json_path(struct watchman_pathspec *spec)
 {
@@ -734,6 +742,11 @@ watchman_do_query(struct watchman_connection *conn,
     if (query) {
         if (query->fields) {
             json_object_set_new(obj, "fields", fields_to_json(query->fields));
+        }
+
+        if (query->empty_on_fresh) {
+            json_object_set_new(obj, "empty_on_fresh_instance",
+				json_true());
         }
 
         if (query->s.time) {
