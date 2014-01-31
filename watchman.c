@@ -939,7 +939,7 @@ watchman_union_expression(enum watchman_expression_type
     assert(nr);
     assert(expressions);
     size_t sz = sizeof(*expressions);
-    struct watchman_expression *result = malloc(sz);
+    struct watchman_expression *result = malloc(sizeof(*result));
     result->ty = ty;
     result->e.union_expr.nr = nr;
     result->e.union_expr.clauses = malloc(nr * sz);
