@@ -746,7 +746,7 @@ watchman_do_query(struct watchman_connection *conn,
 
         if (query->empty_on_fresh) {
             json_object_set_new(obj, "empty_on_fresh_instance",
-				json_true());
+                                json_true());
         }
 
         if (query->s.time) {
