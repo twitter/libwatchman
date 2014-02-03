@@ -11,11 +11,11 @@
 
 #include <jansson.h>
 
-static void watchman_err(struct watchman_error *error, char *message, ...)
+static void watchman_err(struct watchman_error *error, const char *message, ...)
     __attribute__ ((format(printf, 2, 3)));
 
 static void
-watchman_err(struct watchman_error *error, char *message, ...)
+watchman_err(struct watchman_error *error, const char *message, ...)
 {
     va_list argptr;
     va_start(argptr, message);
@@ -647,7 +647,7 @@ watchman_free_query(struct watchman_query *query)
 }
 
 void
-watchman_query_add_suffix(struct watchman_query *query, char *suffix)
+watchman_query_add_suffix(struct watchman_query *query, const char *suffix)
 {
     assert(suffix);
     if (query->cap_suffixes == query->nr_suffixes) {
@@ -664,7 +664,7 @@ watchman_query_add_suffix(struct watchman_query *query, char *suffix)
 }
 
 void
-watchman_query_add_path(struct watchman_query *query, char *path, int depth)
+watchman_query_add_path(struct watchman_query *query, const char *path, int depth)
 {
     if (query->cap_paths == query->nr_paths) {
         if (query->nr_paths == 0) {
@@ -681,7 +681,7 @@ watchman_query_add_path(struct watchman_query *query, char *path, int depth)
 }
 
 void
-watchman_query_set_since_oclock(struct watchman_query *query, char *since)
+watchman_query_set_since_oclock(struct watchman_query *query, const char *since)
 {
     if (query->since_is_str) {
         free(query->s.str);

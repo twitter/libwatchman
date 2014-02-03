@@ -254,11 +254,11 @@ watchman_do_query(struct watchman_connection *connection, const char *fs_path,
 struct watchman_query *
 watchman_query(void);
 void
-watchman_query_add_suffix(struct watchman_query *query, char *suffix);
+watchman_query_add_suffix(struct watchman_query *query, const char *suffix);
 void
-watchman_query_add_path(struct watchman_query *query, char *path, int depth);
+watchman_query_add_path(struct watchman_query *query, const char *path, int depth);
 void
-watchman_query_set_since_oclock(struct watchman_query *query, char *since);
+watchman_query_set_since_oclock(struct watchman_query *query, const char *since);
 void
 watchman_query_set_since_time_t(struct watchman_query *query, time_t since);
 void
