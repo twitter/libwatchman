@@ -2,7 +2,7 @@ SUBDIRS = . tests
 
 ACLOCAL_AMFLAGS=-I m4
 libwatchman_la_SOURCES = watchman.c
-libwatchman_la_LDFLAGS=-module -avoid-version -shared -ljansson
+libwatchman_la_LDFLAGS= -ljansson
 
 lib_LTLIBRARIES = libwatchman.la
 
