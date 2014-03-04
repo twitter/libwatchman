@@ -15,8 +15,8 @@ PKG_CHECK_MODULES([CHECK], [check >= 0.9.2])
 
 LT_INIT()
 
-AC_SEARCH_LIBS([socket], [socket])
-AC_SEARCH_LIBS([jansson], [json_decref])
+AC_SEARCH_LIBS([socket], [socket], [], AC_MSG_ERROR([unable to find socket()]))
+AC_SEARCH_LIBS([json_array], [jansson], [], AC_MSG_ERROR([unable to find jansson]))
 
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_FILES([Makefile tests/Makefile])
