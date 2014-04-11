@@ -1,0 +1,5 @@
+before_install:
+ - sudo apt-get update -qq
+ - sudo apt-get install -qq jansson check automake autoconf libtool
+language: c
+script: ./autogen.sh && ./configure && make && make check
