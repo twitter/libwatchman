@@ -1,5 +1,6 @@
-This is a C interface to watchman
-(https://www.github.com/facebook/watchman).
+# libwatchman [![Build Status](https://secure.travis-ci.org/twitter/libwatchman.png)](http://travis-ci.org/twitter/libwatchman)
+
+This is a C interface to watchman: https://www.github.com/facebook/watchman
 
 You'll need jansson installed in order to use it, and check installed
 to run the tests.
@@ -30,3 +31,8 @@ Watchman makes copies of all strings it has been given. Using the
 watchman_free_* functions will free these (as well as any other data
 that watchman has allocated).  Watchman never frees anything that it
 hasn't created.
+
+## License
+Copyright 2014 Twitter, Inc and other contributors
+
+Licensed under the MIT license
