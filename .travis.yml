@@ -1,5 +1,10 @@
 before_install:
  - sudo apt-get update -qq
  - sudo apt-get install -qq libjansson-dev check automake autoconf libtool
+ - git clone https://github.com/facebook/watchman.git
+ - cd watchman
+ - ./autogen.sh && ./configure && make && sudo make install
+ - cd ..
+ - watchman
 language: c
 script: ./autogen.sh && ./configure && make && make check
