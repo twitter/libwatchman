@@ -44,12 +44,14 @@ watchman_sock_connect(struct watchman_error *error, const char *sockname)
     strncpy(addr.sun_path, sockname, sizeof(addr.sun_path) - 1);
 
     if (connect(fd, (struct sockaddr *) &addr, sizeof(addr)) == -1) {
+        close(fd);
         watchman_err(error, "Connect error %s", strerror(errno));
         return NULL;
     }
 
     FILE *sockfp = fdopen(fd, "r+");
     if (!sockfp) {
+        close(fd);
         watchman_err(error,
                      "Failed to connect to watchman socket %s: %s.",
                      sockname, strerror(errno));
@@ -66,7 +68,7 @@ struct watchman_connection *
 watchman_connect(struct watchman_error *error)
 {
     struct watchman_connection *conn = NULL;
-    FILE *fp = popen("watchman get-sockname", "r");
+    FILE *fp = popen("watchman get-sockname 2>/dev/null", "r");
     if (!fp) {
         watchman_err(error,
                      "Could not run watchman get-sockname: %s",
