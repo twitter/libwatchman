@@ -188,7 +188,7 @@ START_TEST(test_watchman_misc)
     struct watchman_connection *conn = watchman_connect(&error);
     ck_assert_msg(!watchman_watch(conn, test_dir, &error), error.message);
 
-    struct watchman_expression *expressions[8];
+    struct watchman_expression *expressions[9];
     expressions[0] = watchman_since_expression_time_t(0, 0);
     expressions[1] = watchman_since_expression_time_t(1, 0);
     expressions[2] = watchman_since_expression("c:123:45", 0);
