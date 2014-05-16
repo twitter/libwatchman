@@ -7,3 +7,5 @@ libwatchman_la_LDFLAGS= -ljansson
 lib_LTLIBRARIES = libwatchman.la
 
 include_HEADERS = watchman.h
+
+EXTRA_DIST = LICENSE
