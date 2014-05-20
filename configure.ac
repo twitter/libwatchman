@@ -1,4 +1,4 @@
-AC_INIT([libwatchman], [0.0.3], [], [libwatchman])
+AC_INIT([libwatchman], [0.0.4], [], [libwatchman])
 AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE([dist-bzip2 subdir-objects foreign])
 AC_CONFIG_MACRO_DIR([m4])

@@ -57,8 +57,20 @@ enum watchman_expression_type {
     WATCHMAN_EXPR_TY_EXISTS
 };
 
+enum watchman_error_code {
+    WATCHMAN_ERR_CONNECT = 1024,
+    WATCHMAN_ERR_RUN_WATCHMAN,
+    WATCHMAN_ERR_WATCHMAN_BROKEN,
+    WATCHMAN_ERR_WATCHMAN_REPORTED,
+    /* We only want to have codes for the errors that
+     * callers might find interesting*/
+    WATCHMAN_ERR_OTHER
+};
+
 struct watchman_error {
     char *message;
+    enum watchman_error_code code;
+    int err_no;
 };
 
 enum watchman_clockspec {
@@ -265,7 +277,7 @@ void
 watchman_query_set_fields(struct watchman_query *query, int fields);
 void
 watchman_query_set_empty_on_fresh(struct watchman_query *query,
-				  bool empty_on_fresh);
+                                  bool empty_on_fresh);
 void
 watchman_free_expression(struct watchman_expression *expr);
 void
@@ -279,4 +291,6 @@ watchman_release_error(struct watchman_error *error);
 void
 watchman_connection_close(struct watchman_connection *connection);
 
+int
+is_watchman_error(struct watchman_error *error);
 #endif                          /* LIBWATCHMAN_WATCHMAN_H */
