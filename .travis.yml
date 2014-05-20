@@ -5,6 +5,6 @@ before_install:
  - cd watchman
  - ./autogen.sh && ./configure && make && sudo make install
  - cd ..
- - watchman
+ - watchman get-sockname
 language: c
 script: ./autogen.sh && ./configure && make && make check
