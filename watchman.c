@@ -2,20 +2,25 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <jansson.h>
 
-static void watchman_err(struct watchman_error *error, const char *message, ...)
-    __attribute__ ((format(printf, 2, 3)));
+static void watchman_err(struct watchman_error *error,
+                         enum watchman_error_code code,
+                         const char *message, ...)
+    __attribute__ ((format(printf, 3, 4)));
 
 static void
-watchman_err(struct watchman_error *error, const char *message, ...)
+watchman_err(struct watchman_error *error, enum watchman_error_code code,
+             const char *message, ...)
 {
     va_list argptr;
     va_start(argptr, message);
@@ -24,6 +29,8 @@ watchman_err(struct watchman_error *error, const char *message, ...)
     va_end(argptr);
 
     error->message = malloc(len + 1);
+    error->code = code;
+    error->err_no = errno;
     va_start(argptr, message);
     vsnprintf(error->message, len + 1, message, argptr);
     va_end(argptr);
@@ -36,7 +43,8 @@ watchman_sock_connect(struct watchman_error *error, const char *sockname)
 
     int fd;
     if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-        watchman_err(error, "Socket error %s", strerror(errno));
+        watchman_err(error, WATCHMAN_ERR_OTHER, "Socket error %s",
+                     strerror(errno));
         return NULL;
     }
 
@@ -45,14 +53,15 @@ watchman_sock_connect(struct watchman_error *error, const char *sockname)
 
     if (connect(fd, (struct sockaddr *) &addr, sizeof(addr)) == -1) {
         close(fd);
-        watchman_err(error, "Connect error %s", strerror(errno));
+        watchman_err(error, WATCHMAN_ERR_CONNECT, "Connect error %s",
+                     strerror(errno));
         return NULL;
     }
 
     FILE *sockfp = fdopen(fd, "r+");
     if (!sockfp) {
         close(fd);
-        watchman_err(error,
+        watchman_err(error, WATCHMAN_ERR_OTHER,
                      "Failed to connect to watchman socket %s: %s.",
                      sockname, strerror(errno));
         return NULL;
@@ -64,39 +73,122 @@ watchman_sock_connect(struct watchman_error *error, const char *sockname)
     return conn;
 }
 
+struct watchman_popen {
+    FILE *file;
+    int pid;
+};
+
+#define WATCHMAN_EXEC_FAILED 241
+#define WATCHMAN_EXEC_INTERNAL_ERROR 242
+
+static const char* get_sockname_msg = "Could not run watchman get-sockname: %s";
+/* Runs watchman get-sockname and returns a FILE from which the output
+ can be read. */
+static struct watchman_popen *watchman_popen_getsockname(struct watchman_error *error)
+{
+    int pipefd[2];
+    static struct watchman_popen ret = {NULL, 0};
+
+    if (pipe(pipefd) < 0) {
+        goto fail;
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        goto fail;
+    } else if (pid == 0) {
+        if (dup2(pipefd[1], 1) < 0) {
+            exit(WATCHMAN_EXEC_INTERNAL_ERROR);
+        }
+
+        int devnull_fh = open("/dev/null", O_RDWR);
+        if (devnull_fh < 0) {
+            exit(WATCHMAN_EXEC_INTERNAL_ERROR);
+        }
+
+        if (dup2(devnull_fh, 2) < 0) {
+            exit(WATCHMAN_EXEC_INTERNAL_ERROR);
+        }
+
+        execlp("watchman", "watchman", "get-sockname", (char *) NULL);
+        exit(WATCHMAN_EXEC_FAILED);
+    } else {
+        close(pipefd[1]);
+        ret.file = fdopen(pipefd[0], "r");
+        ret.pid = pid;
+        return &ret;
+    }
+
+fail:
+    watchman_err(error, WATCHMAN_ERR_OTHER, get_sockname_msg, strerror(errno));
+    return NULL;
+}
+
+int watchman_pclose(struct watchman_error *error, struct watchman_popen *popen)
+{
+    fclose(popen->file);
+
+    int status;
+    int pid = waitpid(popen->pid, &status, 0);
+    if (pid < 0) {
+        watchman_err(error, WATCHMAN_ERR_RUN_WATCHMAN, get_sockname_msg,
+                     strerror(errno));
+        return -1;
+    }
+
+    switch(WEXITSTATUS(status)) {
+    case 0:
+        return 0;
+    case WATCHMAN_EXEC_FAILED:
+        watchman_err(error, WATCHMAN_ERR_RUN_WATCHMAN, get_sockname_msg,
+                     strerror(errno));
+        return -1;
+    case WATCHMAN_EXEC_INTERNAL_ERROR:
+        watchman_err(error, WATCHMAN_ERR_OTHER, get_sockname_msg,
+                     strerror(errno));
+        return -1;
+    default:
+        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN, get_sockname_msg,
+                     strerror(errno));
+        return -1;
+    }
+}
+
 struct watchman_connection *
 watchman_connect(struct watchman_error *error)
 {
     struct watchman_connection *conn = NULL;
-    FILE *fp = popen("watchman get-sockname 2>/dev/null", "r");
-    if (!fp) {
-        watchman_err(error,
-                     "Could not run watchman get-sockname: %s",
-                     strerror(errno));
+    struct watchman_popen *p = watchman_popen_getsockname(error);
+    if (p == NULL) {
         return NULL;
     }
+
     json_error_t jerror;
-    json_t *json = json_loadf(fp, 0, &jerror);
-    pclose(fp);
+    json_t *json = json_loadf(p->file, JSON_DISABLE_EOF_CHECK, &jerror);
+    if (watchman_pclose(error, p)) {
+        goto done;
+    }
     if (!json) {
-        watchman_err(error,
+        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
                      "Got bad JSON from watchman get-sockname: %s",
                      jerror.text);
         goto done;
     }
     if (!json_is_object(json)) {
-        watchman_err(error, "Got bad JSON from watchman get-sockname:"
-                     " object expected");
+        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                     "Got bad JSON from watchman get-sockname: object expected");
         goto bad_json;
     }
     json_t *sockname_obj = json_object_get(json, "sockname");
     if (!sockname_obj) {
-        watchman_err(error, "Got bad JSON from watchman get-sockname:"
-                     " sockname element expected");
+        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                     "Got bad JSON from watchman get-sockname: "
+                     "sockname element expected");
         goto bad_json;
     }
     if (!json_is_string(sockname_obj)) {
-        watchman_err(error, "Got bad JSON from watchman get-sockname:"
+        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                     "Got bad JSON from watchman get-sockname:"
                      " sockname is not string");
         goto bad_json;
     }
@@ -122,7 +214,8 @@ watchman_send_simple_command(struct watchman_connection *conn,
     }
     int json_result = json_dumpf(cmd_array, conn->fp, JSON_COMPACT);
     if (json_result) {
-        watchman_err(error, "Failed to send simple watchman command");
+        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                     "Failed to send simple watchman command");
         result = 1;
     }
     fputc('\n', conn->fp);
@@ -138,12 +231,14 @@ watchman_read(struct watchman_connection *conn, struct watchman_error *error)
     int flags = JSON_DISABLE_EOF_CHECK;
     json_t *result = json_loadf(conn->fp, flags, &jerror);
     if (!result) {
-        watchman_err(error, "Can't parse result from watchman: %s",
+        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                     "Can't parse result from watchman: %s",
                      jerror.text);
         return NULL;
     }
     if (fgetc(conn->fp) != '\n') {
-        watchman_err(error, "No newline at end of reply");
+        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                     "No newline at end of reply");
         json_decref(result);
         return NULL;
     }
@@ -160,7 +255,8 @@ watchman_read_and_handle_errors(struct watchman_connection *conn,
     }
     if (!json_is_object(obj)) {
         char *bogus_json_text = json_dumps(obj, 0);
-        watchman_err(error, "Got non-object result from watchman : %s",
+        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                     "Got non-object result from watchman : %s",
                      bogus_json_text);
         free(bogus_json_text);
         json_decref(obj);
@@ -168,7 +264,8 @@ watchman_read_and_handle_errors(struct watchman_connection *conn,
     }
     json_t *error_json = json_object_get(obj, "error");
     if (error_json) {
-        watchman_err(error, "Got error result from watchman : %s",
+        watchman_err(error, WATCHMAN_ERR_OTHER,
+                     "Got error result from watchman : %s",
                      json_string_value(error_json));
         json_decref(obj);
         return 1;
@@ -421,7 +518,7 @@ fields_to_json(int fields)
 #define JSON_ASSERT(cond, condarg, msg)                                 \
     if (!cond(condarg)) {                                               \
         char *dump = json_dumps(condarg, 0);                            \
-        watchman_err(error, msg, dump);                                 \
+        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN, msg, dump);   \
         free(dump);                                                     \
         goto done;                                                      \
     }
@@ -501,7 +598,8 @@ watchman_send(struct watchman_connection *conn,
     int json_result = json_dumpf(query, conn->fp, JSON_COMPACT);
     if (json_result) {
         char *dump = json_dumps(query, 0);
-        watchman_err(error, "Failed to send watchman query %s", dump);
+        watchman_err(error, WATCHMAN_ERR_OTHER,
+                     "Failed to send watchman query %s", dump);
         free(dump);
         return 1;
     }
@@ -528,7 +626,8 @@ watchman_query_json(struct watchman_connection *conn, json_t *query,
 
     json_t *jerror = json_object_get(obj, "error");
     if (jerror) {
-        watchman_err(error, "Error result from watchman: %s",
+        watchman_err(error, WATCHMAN_ERR_WATCHMAN_REPORTED,
+                     "Error result from watchman: %s",
                      json_string_value(jerror));
         goto done;
     }

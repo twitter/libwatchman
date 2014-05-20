@@ -1,4 +1,4 @@
-AC_INIT([libwatchman], [0.0.3], [], [libwatchman])
+AC_INIT([libwatchman], [0.0.4], [], [libwatchman])
 AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE([dist-bzip2 subdir-objects foreign])
 AC_CONFIG_MACRO_DIR([m4])
@@ -11,7 +11,7 @@ AC_PROG_LIBTOOL
 AM_PROG_CC_C_O
 AM_PROG_AS
 
-PKG_CHECK_MODULES([CHECK], [check >= 0.9.2])
+PKG_CHECK_MODULES([CHECK], [check >= 0.9.4])
 
 LT_INIT()
 
