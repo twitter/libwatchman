@@ -11,15 +11,12 @@ AC_PROG_LIBTOOL
 AM_PROG_CC_C_O
 AM_PROG_AS
 
-AC_CHECK_HEADER([check.h], [], AC_MSG_ERROR([unable to find check]))
-AM_PATH_CHECK([0.9.4])
-
 LT_INIT()
 
 AC_SEARCH_LIBS([socket], [socket], [], AC_MSG_ERROR([unable to find socket()]))
 AC_SEARCH_LIBS([json_array], [jansson], [], AC_MSG_ERROR([unable to find jansson]))
 
 AC_CONFIG_HEADER([config.h])
-AC_CONFIG_FILES([Makefile tests/Makefile])
+AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
 

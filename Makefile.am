@@ -1,4 +1,4 @@
-SUBDIRS = . tests
+SUBDIRS = .
 
 ACLOCAL_AMFLAGS=-I m4
 libwatchman_la_SOURCES = watchman.c
