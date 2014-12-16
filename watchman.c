@@ -158,11 +158,18 @@ struct watchman_connection *
 watchman_connect(struct watchman_error *error)
 {
     struct watchman_connection *conn = NULL;
+    /* If an environment variable WATCHMAN_SOCKET is set, establish a connection
+       to that address. Otherwise, run `watchman get-socket` to start the daemon
+       and retrieve its address. */
+    const char *sockname_env = getenv("WATCHMAN_SOCKET");
+    if (sockname_env) {
+        conn = watchman_sock_connect(error, sockname_env);
+        goto done;
+    }
     struct watchman_popen *p = watchman_popen_getsockname(error);
     if (p == NULL) {
         return NULL;
     }
-
     json_error_t jerror;
     json_t *json = json_loadf(p->file, JSON_DISABLE_EOF_CHECK, &jerror);
     if (watchman_pclose(error, p)) {
