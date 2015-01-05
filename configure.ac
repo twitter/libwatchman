@@ -11,8 +11,7 @@ AC_PROG_LIBTOOL
 AM_PROG_CC_C_O
 AM_PROG_AS
 
-AC_CHECK_HEADER([check.h], [], AC_MSG_ERROR([unable to find check]))
-AM_PATH_CHECK([0.9.4])
+PKG_CHECK_MODULES([CHECK], [check >= 0.9.4])
 
 LT_INIT()
 
