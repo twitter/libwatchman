@@ -59,6 +59,7 @@ enum watchman_expression_type {
 
 enum watchman_error_code {
     WATCHMAN_ERR_CONNECT = 1024,
+    WATCHMAN_ERR_TIMEOUT,
     WATCHMAN_ERR_RUN_WATCHMAN,
     WATCHMAN_ERR_WATCHMAN_BROKEN,
     WATCHMAN_ERR_WATCHMAN_REPORTED,
@@ -208,7 +209,7 @@ struct watchman_expression {
 };
 
 struct watchman_connection *
-watchman_connect(struct watchman_error *error);
+watchman_connect(struct timeval timeout, struct watchman_error *error);
 int
 watchman_watch(struct watchman_connection *connection, const char *path,
                struct watchman_error *error);

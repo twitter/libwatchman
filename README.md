@@ -12,7 +12,7 @@ watchman_connect, do some commands, then disconnect with
 watchman_connection_close. These functions handle memory
 management for you.
 
-To set up a watch on a directoy, use watchman_watch.
+To set up a watch on a directory, use watchman_watch.
 
 To make a query, first construct an expression using the
 watchman_*_expression functions, then use watchman_do_query. It's OK
@@ -33,6 +33,6 @@ that watchman has allocated).  Watchman never frees anything that it
 hasn't created.
 
 ## License
-Copyright 2014 Twitter, Inc and other contributors
+Copyright 2014-2015 Twitter, Inc and other contributors
 
 Licensed under the MIT license
