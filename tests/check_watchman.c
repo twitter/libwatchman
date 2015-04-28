@@ -63,10 +63,33 @@ teardown(void)
     rmdir_recursive(test_dir);
 }
 
+START_TEST(test_watchman_connect_timeout_fails)
+{
+    struct watchman_error error;
+    struct timeval tv = {0};
+    tv.tv_usec = 1;
+    struct watchman_connection *conn = watchman_connect(tv, &error);
+    ck_assert_msg(conn == NULL, "Should have failed to connect");
+}
+END_TEST
+
+START_TEST(test_watchman_connect_timeout_succeeds)
+{
+    struct watchman_error error;
+    struct timeval tv = {0};
+    tv.tv_sec = 10;
+    struct watchman_connection *conn = watchman_connect(tv, &error);
+    ck_assert_msg(conn != NULL, error.message);
+    watchman_connection_close(conn);
+}
+END_TEST
+
+
 START_TEST(test_watchman_connect)
 {
     struct watchman_error error;
-    struct watchman_connection *conn = watchman_connect(&error);
+    struct timeval tv_zero = {0};
+    struct watchman_connection *conn = watchman_connect(tv_zero, &error);
     ck_assert_msg(conn != NULL, error.message);
     ck_assert_msg(!watchman_watch(conn, test_dir, &error), error.message);
 
@@ -131,7 +154,8 @@ create_dir(char *dirname)
 START_TEST(test_watchman_watch)
 {
     struct watchman_error error;
-    struct watchman_connection *conn = watchman_connect(&error);
+    struct timeval tv_zero = {0};
+    struct watchman_connection *conn = watchman_connect(tv_zero, &error);
     ck_assert_msg(conn != NULL, error.message);
     ck_assert_msg(!watchman_watch(conn, test_dir, &error), error.message);
 
@@ -185,7 +209,8 @@ END_TEST
 START_TEST(test_watchman_misc)
 {
     struct watchman_error error;
-    struct watchman_connection *conn = watchman_connect(&error);
+    struct timeval tv_zero = {0};
+    struct watchman_connection *conn = watchman_connect(tv_zero, &error);
     ck_assert_msg(!watchman_watch(conn, test_dir, &error), error.message);
 
     struct watchman_expression *expressions[9];
@@ -223,6 +248,8 @@ watchman_suite(void)
     /* Core test case */
     TCase *tc_core = tcase_create("Core");
     tcase_add_checked_fixture(tc_core, setup, teardown);
+    tcase_add_test(tc_core, test_watchman_connect_timeout_fails);
+    tcase_add_test(tc_core, test_watchman_connect_timeout_succeeds);
     tcase_add_test(tc_core, test_watchman_connect);
     tcase_add_test(tc_core, test_watchman_watch);
     tcase_add_test(tc_core, test_watchman_misc);
