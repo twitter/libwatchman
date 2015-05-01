@@ -6,12 +6,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #include <jansson.h>
+
+/* It's safe to have a small buffer here because watchman's socket name
+ * is guaranteed to be under 108 bytes (see sockaddr_un).  The JSON only has
+ * sockname and version fields.
+*/
+#define WATCHMAN_GET_SOCKNAME_MAX 1024
 
 static void watchman_err(struct watchman_error *error,
                          enum watchman_error_code code,
@@ -22,6 +30,8 @@ static void
 watchman_err(struct watchman_error *error, enum watchman_error_code code,
              const char *message, ...)
 {
+    if (!error)
+        return;
     va_list argptr;
     va_start(argptr, message);
     char c;
@@ -36,8 +46,9 @@ watchman_err(struct watchman_error *error, enum watchman_error_code code,
     va_end(argptr);
 }
 
-struct watchman_connection *
-watchman_sock_connect(struct watchman_error *error, const char *sockname)
+
+static struct watchman_connection *
+watchman_sock_connect(const char *sockname, struct timeval timeout, struct watchman_error *error)
 {
     struct sockaddr_un addr = { };
 
@@ -51,9 +62,23 @@ watchman_sock_connect(struct watchman_error *error, const char *sockname)
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, sockname, sizeof(addr.sun_path) - 1);
 
+    /* We don't need to worry about connect hanging, because it's a
+     * Unix Domain Socket, and connect never hangs on those */
     if (connect(fd, (struct sockaddr *) &addr, sizeof(addr)) == -1) {
         close(fd);
         watchman_err(error, WATCHMAN_ERR_CONNECT, "Connect error %s",
+                     strerror(errno));
+        return NULL;
+    }
+
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout))) {
+        watchman_err(error, WATCHMAN_ERR_CONNECT, "Failed to set timeout %s",
+                     strerror(errno));
+        return NULL;
+    }
+
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout))) {
+        watchman_err(error, WATCHMAN_ERR_CONNECT, "Failed to set timeout %s",
                      strerror(errno));
         return NULL;
     }
@@ -74,7 +99,7 @@ watchman_sock_connect(struct watchman_error *error, const char *sockname)
 }
 
 struct watchman_popen {
-    FILE *file;
+    int fd;
     int pid;
 };
 
@@ -87,7 +112,7 @@ static const char* get_sockname_msg = "Could not run watchman get-sockname: %s";
 static struct watchman_popen *watchman_popen_getsockname(struct watchman_error *error)
 {
     int pipefd[2];
-    static struct watchman_popen ret = {NULL, 0};
+    static struct watchman_popen ret = {0, 0};
 
     if (pipe(pipefd) < 0) {
         goto fail;
@@ -114,7 +139,7 @@ static struct watchman_popen *watchman_popen_getsockname(struct watchman_error *
         exit(WATCHMAN_EXEC_FAILED);
     } else {
         close(pipefd[1]);
-        ret.file = fdopen(pipefd[0], "r");
+        ret.fd = pipefd[0];
         ret.pid = pid;
         return &ret;
     }
@@ -126,7 +151,7 @@ fail:
 
 int watchman_pclose(struct watchman_error *error, struct watchman_popen *popen)
 {
-    fclose(popen->file);
+    close(popen->fd);
 
     int status;
     int pid = waitpid(popen->pid, &status, 0);
@@ -154,8 +179,69 @@ int watchman_pclose(struct watchman_error *error, struct watchman_popen *popen)
     }
 }
 
+/*
+ * Read from fd into buf until either `bytes` bytes have been read, or
+ * EOF, or the data that has been read can be parsed as JSON.  In the
+ * event of a timeout or read error, returns NULL.
+ */
+static json_t *read_json_with_timeout(int fd, char* buf, size_t bytes, struct timeval timeout)
+{
+
+    size_t read_so_far = 0;
+    fd_set read_fds;
+    ssize_t bytes_read = 0;
+    FD_ZERO(&read_fds);
+    FD_SET(fd, &read_fds);
+
+    struct timeval start;
+    gettimeofday(&start, NULL);
+    while (read_so_far < bytes) {
+        if (timeout.tv_sec || timeout.tv_usec) {
+            struct timeval now, diff, remaining;
+
+            gettimeofday(&now, NULL);
+            timersub(&now, &start, &diff);
+            timersub(&timeout, &diff, &remaining);
+
+            if (remaining.tv_sec < 0 || remaining.tv_usec < 0) {
+                /* Timeout */
+                return NULL;
+            }
+
+            if (select(fd + 1, &read_fds, NULL, NULL, &remaining) == 1) {
+                bytes_read = read(fd, buf, bytes - read_so_far);
+            } else {
+                continue;
+            }
+        } else {
+            bytes_read = read(fd, buf, bytes - read_so_far);
+        }
+        if (bytes_read < 0) {
+            return NULL;
+        }
+        if (bytes_read == 0) {
+            /* EOF, but we couldn't parse the JSON we have so far */
+            return NULL;
+        }
+        read_so_far += bytes_read;
+
+        /* try to parse this */
+        buf[read_so_far] = 0;
+        json_error_t jerror;
+        json_t *json = json_loads(buf, JSON_DISABLE_EOF_CHECK, &jerror);
+        if (json)
+            return json;
+    }
+    return NULL;
+}
+
+/*
+ * Connect to watchman's socket.  Sets a socket send and receive
+ * timeout of `timeout`.  Pass a {0} for no-timeout.  On error,
+ * returns NULL and, if `error` is non-NULL, fills it in.
+ */
 struct watchman_connection *
-watchman_connect(struct watchman_error *error)
+watchman_connect(struct timeval timeout, struct watchman_error *error)
 {
     struct watchman_connection *conn = NULL;
     /* If an environment variable WATCHMAN_SOCKET is set, establish a connection
@@ -163,22 +249,24 @@ watchman_connect(struct watchman_error *error)
        and retrieve its address. */
     const char *sockname_env = getenv("WATCHMAN_SOCKET");
     if (sockname_env) {
-        conn = watchman_sock_connect(error, sockname_env);
-        goto done;
+	conn = watchman_sock_connect(sockname_env, timeout, error);
+	goto done;
     }
     struct watchman_popen *p = watchman_popen_getsockname(error);
     if (p == NULL) {
         return NULL;
     }
-    json_error_t jerror;
-    json_t *json = json_loadf(p->file, JSON_DISABLE_EOF_CHECK, &jerror);
+
+    char buf[WATCHMAN_GET_SOCKNAME_MAX + 1];
+
+    json_t *json = read_json_with_timeout(p->fd, buf, WATCHMAN_GET_SOCKNAME_MAX, timeout);
+
     if (watchman_pclose(error, p)) {
         goto done;
     }
     if (!json) {
         watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
-                     "Got bad JSON from watchman get-sockname: %s",
-                     jerror.text);
+                     "Got bad or no JSON from watchman get-sockname");
         goto done;
     }
     if (!json_is_object(json)) {
@@ -200,7 +288,7 @@ watchman_connect(struct watchman_error *error)
         goto bad_json;
     }
     const char *sockname = json_string_value(sockname_obj);
-    conn = watchman_sock_connect(error, sockname);
+    conn = watchman_sock_connect(sockname, timeout, error);
 bad_json:
     json_decref(json);
 done:
@@ -221,8 +309,13 @@ watchman_send_simple_command(struct watchman_connection *conn,
     }
     int json_result = json_dumpf(cmd_array, conn->fp, JSON_COMPACT);
     if (json_result) {
-        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
-                     "Failed to send simple watchman command");
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            watchman_err(error, WATCHMAN_ERR_TIMEOUT,
+                         "Timeout sending simple watchman command");
+        } else {
+            watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                         "Failed to send simple watchman command");
+        }
         result = 1;
     }
     fputc('\n', conn->fp);
@@ -238,14 +331,24 @@ watchman_read(struct watchman_connection *conn, struct watchman_error *error)
     int flags = JSON_DISABLE_EOF_CHECK;
     json_t *result = json_loadf(conn->fp, flags, &jerror);
     if (!result) {
-        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
-                     "Can't parse result from watchman: %s",
-                     jerror.text);
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            watchman_err(error, WATCHMAN_ERR_TIMEOUT,
+                         "Timeout reading from watchman");
+        } else {
+            watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                         "Can't parse result from watchman: %s",
+                         jerror.text);
+        }
         return NULL;
     }
     if (fgetc(conn->fp) != '\n') {
-        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
-                     "No newline at end of reply");
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            watchman_err(error, WATCHMAN_ERR_TIMEOUT,
+                         "Timeout reading EOL from watchman");
+        } else {
+            watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                         "No newline at end of reply");
+        }
         json_decref(result);
         return NULL;
     }
@@ -604,10 +707,15 @@ watchman_send(struct watchman_connection *conn,
 {
     int json_result = json_dumpf(query, conn->fp, JSON_COMPACT);
     if (json_result) {
-        char *dump = json_dumps(query, 0);
-        watchman_err(error, WATCHMAN_ERR_OTHER,
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            watchman_err(error, WATCHMAN_ERR_TIMEOUT,
+                         "Timeout sending to watchman");
+        } else {
+            char *dump = json_dumps(query, 0);
+            watchman_err(error, WATCHMAN_ERR_OTHER,
                      "Failed to send watchman query %s", dump);
-        free(dump);
+            free(dump);
+        }
         return 1;
     }
     fputc('\n', conn->fp);
