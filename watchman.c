@@ -244,10 +244,10 @@ struct watchman_connection *
 watchman_connect(struct timeval timeout, struct watchman_error *error)
 {
     struct watchman_connection *conn = NULL;
-    /* If an environment variable WATCHMAN_SOCKET is set, establish a connection
-       to that address. Otherwise, run `watchman get-socket` to start the daemon
-       and retrieve its address. */
-    const char *sockname_env = getenv("WATCHMAN_SOCKET");
+    /* If an environment variable WATCHMAN_SOCK is set, establish a connection
+       to that address. Otherwise, run `watchman get-sockname` to start the
+       daemon and retrieve its address. */
+    const char *sockname_env = getenv("WATCHMAN_SOCK");
     if (sockname_env) {
 	conn = watchman_sock_connect(sockname_env, timeout, error);
         goto done;
