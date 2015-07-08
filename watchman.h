@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <time.h>
+#include <sys/time.h>
 #include <sys/types.h>
-
 
 enum watchman_fields {
     WATCHMAN_FIELD_NAME = 0x00000001,
