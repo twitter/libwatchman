@@ -249,7 +249,7 @@ watchman_connect(struct timeval timeout, struct watchman_error *error)
        daemon and retrieve its address. */
     const char *sockname_env = getenv("WATCHMAN_SOCK");
     if (sockname_env) {
-	conn = watchman_sock_connect(sockname_env, timeout, error);
+        conn = watchman_sock_connect(sockname_env, timeout, error);
         goto done;
     }
     struct watchman_popen *p = watchman_popen_getsockname(error);
