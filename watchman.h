@@ -291,6 +291,9 @@ void
 watchman_release_error(struct watchman_error *error);
 void
 watchman_connection_close(struct watchman_connection *connection);
+int
+watchman_recrawl(struct watchman_connection *connection, const char *path,
+								 struct watchman_error *error);
 
 int
 is_watchman_error(struct watchman_error *error);

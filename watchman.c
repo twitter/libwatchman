@@ -399,6 +399,19 @@ watchman_watch(struct watchman_connection *conn,
 }
 
 int
+watchman_recrawl(struct watchman_connection *conn,
+               const char *path, struct watchman_error *error)
+{
+    if (watchman_send_simple_command(conn, error, "debug-recrawl", path, NULL)) {
+        return 1;
+    }
+    if (watchman_read_and_handle_errors(conn, error)) {
+        return 1;
+    }
+    return 0;
+}
+
+int
 watchman_watch_del(struct watchman_connection *conn,
                    const char *path, struct watchman_error *error)
 {
