@@ -187,20 +187,25 @@ int watchman_pclose(struct watchman_error *error, struct watchman_popen *popen)
  */
 static int block_on_read(int fd, struct timeval *timeout)
 {
-    struct timeval now, start, elapsed;
+    struct timeval now, start, elapsed, orig_timeout;
     fd_set fds;
-    int ret=0;
+    int ret = 0;
 
     FD_ZERO(&fds);
     FD_SET(fd, &fds);
 
-    gettimeofday(&start, NULL);
+    if (timeout != NULL) {
+        gettimeofday(&start, NULL);
+        memcpy(&orig_timeout, timeout, sizeof(orig_timeout));
+    }
 
     ret = select(fd + 1, &fds, NULL, NULL, timeout);
 
-    gettimeofday(&now, NULL);
-    timersub(&now, &start, &elapsed);
-    timersub(timeout, &elapsed, timeout);
+    if (timeout != NULL) {
+        gettimeofday(&now, NULL);
+        timersub(&now, &start, &elapsed);
+        timersub(&orig_timeout, &elapsed, timeout);
+    }
 
     return ret;
 }
@@ -347,25 +352,25 @@ watchman_read_with_timeout(struct watchman_connection *conn, struct timeval *tim
 
     int ret = block_on_read(fileno(conn->fp), timeout);
     if (ret == -1) {
-      watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
-                   "Error encountered blocking on watchman");
+        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                     "Error encountered blocking on watchman");
     }
 
     result = json_loadf(conn->fp, flags, &jerror);
     if (!result) {
-      if (errno == EAGAIN) {
-        watchman_err(error, WATCHMAN_ERR_TIMEOUT,
-                     "Timeout:EAGAIN reading from watchman.");
-      }
-      else if (errno == EWOULDBLOCK) {
-        watchman_err(error, WATCHMAN_ERR_TIMEOUT,
-                     "Timeout:EWOULDBLOCK reading from watchman");
-      } else {
-        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
-                     "Can't parse result from watchman: %s",
-                     jerror.text);
-      }
-      return NULL;
+        if (errno == EAGAIN) {
+            watchman_err(error, WATCHMAN_ERR_TIMEOUT,
+                         "Timeout:EAGAIN reading from watchman.");
+        }
+        else if (errno == EWOULDBLOCK) {
+            watchman_err(error, WATCHMAN_ERR_TIMEOUT,
+                         "Timeout:EWOULDBLOCK reading from watchman");
+        } else {
+            watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                         "Can't parse result from watchman: %s",
+                         jerror.text);
+        }
+        return NULL;
     }
     if (fgetc(conn->fp) != '\n') {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -384,8 +389,7 @@ watchman_read_with_timeout(struct watchman_connection *conn, struct timeval *tim
 static json_t *
 watchman_read(struct watchman_connection *conn, struct watchman_error *error)
 {
-  struct timeval unused = {0};
-  return watchman_read_with_timeout(conn, &unused, error);
+  return watchman_read_with_timeout(conn, NULL, error);
 }
 
 static int
