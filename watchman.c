@@ -180,7 +180,7 @@ int watchman_pclose(struct watchman_error *error, struct watchman_popen *popen)
 }
 
 /**
- * Call select() on the given fd until it's ready to read from or
+ * Calls select() on the given fd until it's ready to read from or
  * until the timeout expires. Updates timeout to indicate the
  * remaining time. Returns 1 if the socket is readable, 0 if the
  * socket is not readable, and -1 on error.
