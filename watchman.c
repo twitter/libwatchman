@@ -179,6 +179,37 @@ int watchman_pclose(struct watchman_error *error, struct watchman_popen *popen)
     }
 }
 
+/**
+ * Calls select() on the given fd until it's ready to read from or
+ * until the timeout expires. Updates timeout to indicate the
+ * remaining time. Returns 1 if the socket is readable, 0 if the
+ * socket is not readable, and -1 on error.
+ */
+static int block_on_read(int fd, struct timeval *timeout)
+{
+    struct timeval now, start, elapsed, orig_timeout;
+    fd_set fds;
+    int ret = 0;
+
+    FD_ZERO(&fds);
+    FD_SET(fd, &fds);
+
+    if (timeout != NULL) {
+        gettimeofday(&start, NULL);
+        memcpy(&orig_timeout, timeout, sizeof(orig_timeout));
+    }
+
+    ret = select(fd + 1, &fds, NULL, NULL, timeout);
+
+    if (timeout != NULL) {
+        gettimeofday(&now, NULL);
+        timersub(&now, &start, &elapsed);
+        timersub(&orig_timeout, &elapsed, timeout);
+    }
+
+    return ret;
+}
+
 /*
  * Read from fd into buf until either `bytes` bytes have been read, or
  * EOF, or the data that has been read can be parsed as JSON.  In the
@@ -186,32 +217,20 @@ int watchman_pclose(struct watchman_error *error, struct watchman_popen *popen)
  */
 static json_t *read_json_with_timeout(int fd, char* buf, size_t bytes, struct timeval timeout)
 {
-
     size_t read_so_far = 0;
-    fd_set read_fds;
     ssize_t bytes_read = 0;
-    FD_ZERO(&read_fds);
-    FD_SET(fd, &read_fds);
 
-    struct timeval start;
-    gettimeofday(&start, NULL);
     while (read_so_far < bytes) {
         if (timeout.tv_sec || timeout.tv_usec) {
-            struct timeval now, diff, remaining;
-
-            gettimeofday(&now, NULL);
-            timersub(&now, &start, &diff);
-            timersub(&timeout, &diff, &remaining);
-
-            if (remaining.tv_sec < 0 || remaining.tv_usec < 0) {
+            if (timeout.tv_sec < 0 || timeout.tv_usec < 0) {
                 /* Timeout */
                 return NULL;
             }
 
-            if (select(fd + 1, &read_fds, NULL, NULL, &remaining) == 1) {
+            if (1 == block_on_read(fd, &timeout)) {
                 bytes_read = read(fd, buf, bytes - read_so_far);
             } else {
-                continue;
+                return NULL; /* timeout or error */
             }
         } else {
             bytes_read = read(fd, buf, bytes - read_so_far);
@@ -249,7 +268,7 @@ watchman_connect(struct timeval timeout, struct watchman_error *error)
        daemon and retrieve its address. */
     const char *sockname_env = getenv("WATCHMAN_SOCK");
     if (sockname_env) {
-	conn = watchman_sock_connect(sockname_env, timeout, error);
+        conn = watchman_sock_connect(sockname_env, timeout, error);
         goto done;
     }
     struct watchman_popen *p = watchman_popen_getsockname(error);
@@ -325,15 +344,27 @@ watchman_send_simple_command(struct watchman_connection *conn,
 }
 
 static json_t *
-watchman_read(struct watchman_connection *conn, struct watchman_error *error)
+watchman_read_with_timeout(struct watchman_connection *conn, struct timeval *timeout, struct watchman_error *error)
 {
     json_error_t jerror;
     int flags = JSON_DISABLE_EOF_CHECK;
-    json_t *result = json_loadf(conn->fp, flags, &jerror);
+    json_t *result;
+
+    int ret = block_on_read(fileno(conn->fp), timeout);
+    if (ret == -1) {
+        watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                     "Error encountered blocking on watchman");
+    }
+
+    result = json_loadf(conn->fp, flags, &jerror);
     if (!result) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (errno == EAGAIN) {
             watchman_err(error, WATCHMAN_ERR_TIMEOUT,
-                         "Timeout reading from watchman");
+                         "Timeout:EAGAIN reading from watchman.");
+        }
+        else if (errno == EWOULDBLOCK) {
+            watchman_err(error, WATCHMAN_ERR_TIMEOUT,
+                         "Timeout:EWOULDBLOCK reading from watchman");
         } else {
             watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
                          "Can't parse result from watchman: %s",
@@ -353,6 +384,12 @@ watchman_read(struct watchman_connection *conn, struct watchman_error *error)
         return NULL;
     }
     return result;
+}
+
+static json_t *
+watchman_read(struct watchman_connection *conn, struct watchman_error *error)
+{
+  return watchman_read_with_timeout(conn, NULL, error);
 }
 
 static int
@@ -736,7 +773,9 @@ watchman_send(struct watchman_connection *conn,
 }
 
 static struct watchman_query_result *
-watchman_query_json(struct watchman_connection *conn, json_t *query,
+watchman_query_json(struct watchman_connection *conn,
+                    json_t *query,
+                    struct timeval *timeout,
                     struct watchman_error *error)
 {
     struct watchman_query_result *result = NULL;
@@ -746,7 +785,7 @@ watchman_query_json(struct watchman_connection *conn, json_t *query,
         return NULL;
     }
     /* parse the result */
-    json_t *obj = watchman_read(conn, error);
+    json_t *obj = watchman_read_with_timeout(conn, timeout, error);
     if (!obj) {
         return NULL;
     }
@@ -956,11 +995,12 @@ json_path(struct watchman_pathspec *spec)
 }
 
 struct watchman_query_result *
-watchman_do_query(struct watchman_connection *conn,
-                  const char *fs_path,
-                  const struct watchman_query *query,
-                  const struct watchman_expression *expr,
-                  struct watchman_error *error)
+watchman_do_query_timeout(struct watchman_connection *conn,
+                          const char *fs_path,
+                          const struct watchman_query *query,
+                          const struct watchman_expression *expr,
+                          struct timeval *timeout,
+                          struct watchman_error *error)
 {
     /* construct the json */
     json_t *json = json_array();
@@ -1019,9 +1059,20 @@ watchman_do_query(struct watchman_connection *conn,
     json_array_append_new(json, obj);
 
     /* do the query */
-    struct watchman_query_result *r = watchman_query_json(conn, json, error);
+    struct watchman_query_result *r = watchman_query_json(conn, json, timeout, error);
     json_decref(json);
     return r;
+}
+
+struct watchman_query_result *
+watchman_do_query(struct watchman_connection *conn,
+                  const char *fs_path,
+                  const struct watchman_query *query,
+                  const struct watchman_expression *expr,
+                  struct watchman_error *error)
+{
+  struct timeval unused = {0};
+  return watchman_do_query_timeout(conn, fs_path, query, expr, &unused, error);
 }
 
 void
