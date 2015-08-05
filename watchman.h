@@ -264,6 +264,13 @@ watchman_do_query(struct watchman_connection *connection, const char *fs_path,
                   const struct watchman_query *query,
                   const struct watchman_expression *expr,
                   struct watchman_error *error);
+struct watchman_query_result *
+watchman_do_query_timeout(struct watchman_connection *conn,
+                          const char *fs_path,
+                          const struct watchman_query *query,
+                          const struct watchman_expression *expr,
+                          struct timeval *timeout,
+                          struct watchman_error *error);
 struct watchman_query *
 watchman_query(void);
 void
