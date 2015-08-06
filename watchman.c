@@ -683,6 +683,30 @@ fields_to_json(int fields)
         goto done;                                                      \
     }
 
+char *
+watchman_clock(struct watchman_connection *conn,
+               const char *path, struct watchman_error *error)
+{
+    char *result = NULL;
+
+    if (watchman_send_simple_command(conn, error, "clock", path, NULL)) {
+        return NULL;
+    }
+
+    json_t *obj = watchman_read(conn, error);
+    if (!obj) {
+        return NULL;
+    }
+    JSON_ASSERT(json_is_object, obj, "Got bogus value from clock %s");
+    json_t *clock = json_object_get(obj, "clock");
+    JSON_ASSERT(json_is_string, clock, "Bad clock %s");
+    result = strdup(json_string_value(clock));
+
+done:
+    json_decref(obj);
+    return result;
+}
+
 struct watchman_watch_list *
 watchman_watch_list(struct watchman_connection *conn,
                     struct watchman_error *error)
