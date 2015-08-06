@@ -306,7 +306,12 @@ void
 watchman_connection_close(struct watchman_connection *connection);
 int
 watchman_recrawl(struct watchman_connection *connection, const char *path,
-								 struct watchman_error *error);
+                 struct watchman_error *error);
+char *
+watchman_clock(struct watchman_connection *conn,
+               const char *path,
+               unsigned int sync_timeout,
+               struct watchman_error *error);
 int
 watchman_version(struct watchman_connection *conn,
                  struct watchman_error *error,
@@ -314,7 +319,6 @@ watchman_version(struct watchman_connection *conn,
 int
 watchman_shutdown_server(struct watchman_connection *conn,
                          struct watchman_error *error);
-  
 
 int
 is_watchman_error(struct watchman_error *error);
