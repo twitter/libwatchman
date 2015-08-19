@@ -683,30 +683,6 @@ fields_to_json(int fields)
         goto done;                                                      \
     }
 
-char *
-watchman_clock(struct watchman_connection *conn,
-               const char *path, struct watchman_error *error)
-{
-    char *result = NULL;
-
-    if (watchman_send_simple_command(conn, error, "clock", path, NULL)) {
-        return NULL;
-    }
-
-    json_t *obj = watchman_read(conn, error);
-    if (!obj) {
-        return NULL;
-    }
-    JSON_ASSERT(json_is_object, obj, "Got bogus value from clock %s");
-    json_t *clock = json_object_get(obj, "clock");
-    JSON_ASSERT(json_is_string, clock, "Bad clock %s");
-    result = strdup(json_string_value(clock));
-
-done:
-    json_decref(obj);
-    return result;
-}
-
 struct watchman_watch_list *
 watchman_watch_list(struct watchman_connection *conn,
                     struct watchman_error *error)
@@ -794,6 +770,42 @@ watchman_send(struct watchman_connection *conn,
     }
     fputc('\n', conn->fp);
     return 0;
+}
+
+char *
+watchman_clock(struct watchman_connection *conn,
+               const char *path,
+               unsigned int sync_timeout,
+               struct watchman_error *error)
+{
+    char *result = NULL;
+    json_t *query = json_array();
+    json_array_append_new(query, json_string("clock"));
+    json_array_append_new(query, json_string(path));
+    if (sync_timeout) {
+        json_t *options = json_object();
+        json_object_set_new(options, "sync_timeout", json_integer(sync_timeout));
+        json_array_append_new(query, options);
+    }
+
+    int ret = watchman_send(conn, query, error);
+    json_decref(query);
+    if (ret) {
+        return NULL;
+    }
+
+    json_t *obj = watchman_read(conn, error);
+    if (!obj) {
+        return NULL;
+    }
+    JSON_ASSERT(json_is_object, obj, "Got bogus value from clock %s");
+    json_t *clock = json_object_get(obj, "clock");
+    JSON_ASSERT(json_is_string, clock, "Bad clock %s");
+    result = strdup(json_string_value(clock));
+
+done:
+    json_decref(obj);
+    return result;
 }
 
 static struct watchman_query_result *

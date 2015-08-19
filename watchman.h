@@ -303,7 +303,9 @@ watchman_recrawl(struct watchman_connection *connection, const char *path,
                  struct watchman_error *error);
 char *
 watchman_clock(struct watchman_connection *conn,
-               const char *path, struct watchman_error *error);
+               const char *path,
+               unsigned int sync_timeout,
+               struct watchman_error *error);
 
 int
 is_watchman_error(struct watchman_error *error);
