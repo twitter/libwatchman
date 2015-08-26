@@ -1,4 +1,4 @@
-#include "../watchman.h"
+#include "watchman.h"
 #include <assert.h>
 #include <check.h>
 #include <dirent.h>
@@ -14,7 +14,10 @@ char test_dir[L_tmpnam];
 void
 setup(void)
 {
-    assert(tmpnam(test_dir));
+    char test_dir_tmp[L_tmpnam];
+    assert(tmpnam(test_dir_tmp));
+    realpath(test_dir_tmp, test_dir);
+
     mode_t mode = 0700;
     if (mkdir(test_dir, mode)) {
         perror("Couldn't make test directory");
