@@ -34,3 +34,4 @@ tests/check_watchman.log
 tests/check_watchman.trs
 tests/test-suite.log
 test-driver
+/build/

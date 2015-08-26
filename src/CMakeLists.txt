@@ -1,0 +1,5 @@
+include_directories(.)
+add_library(watchman SHARED watchman.c)
+install (TARGETS watchman DESTINATION lib)
+install (FILES watchman.h DESTINATION include)
+target_link_libraries(watchman jansson)
