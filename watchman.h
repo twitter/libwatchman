@@ -208,6 +208,12 @@ struct watchman_expression {
     } e;
 };
 
+struct watchman_version {
+	int major;
+	int minor;
+	int micro;
+};
+
 struct watchman_connection *
 watchman_connect(struct timeval timeout, struct watchman_error *error);
 int
@@ -301,6 +307,14 @@ watchman_connection_close(struct watchman_connection *connection);
 int
 watchman_recrawl(struct watchman_connection *connection, const char *path,
 								 struct watchman_error *error);
+int
+watchman_version(struct watchman_connection *conn,
+                 struct watchman_error *error,
+                 struct watchman_version* version);
+int
+watchman_shutdown_server(struct watchman_connection *conn,
+                         struct watchman_error *error);
+  
 
 int
 is_watchman_error(struct watchman_error *error);

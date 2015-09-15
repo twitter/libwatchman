@@ -1324,3 +1324,60 @@ watchman_type_expression(char c)
     result->e.type_expr.type = c;
     return result;
 }
+
+int
+watchman_version(struct watchman_connection *conn,
+                 struct watchman_error *error,
+                 struct watchman_version* version)
+{
+    const char *result = NULL;
+    json_t *cmd = json_array();
+    json_array_append_new(cmd, json_string("version"));
+
+    int ret = watchman_send(conn, cmd, error);
+    json_decref(cmd);
+    if (ret) {
+        return -1;
+    }
+
+    json_t *obj = watchman_read(conn, error);
+    if (!obj) {
+        return -1;
+    }
+    JSON_ASSERT(json_is_object, obj, "Got bogus value from version %s");
+    json_t *version_field = json_object_get(obj, "version");
+    JSON_ASSERT(json_is_string, version_field, "Bad version %s");
+    result = json_string_value(version_field);
+
+    int count = sscanf(result, "%d.%d.%d", &version->major,
+                       &version->minor, &version->micro);
+    json_decref(obj);
+    return count == 3 ? 0 : -1;
+
+done:
+    json_decref(obj);
+    return -1;
+}
+
+int
+watchman_shutdown_server(struct watchman_connection *conn,
+                         struct watchman_error *error)
+{
+    json_t *cmd = json_array();
+    json_array_append_new(cmd, json_string("shutdown-server"));
+
+    int ret = watchman_send(conn, cmd, error);
+    json_decref(cmd);
+
+    if (ret) {
+        return -1;
+    }
+
+    json_t *obj = watchman_read(conn, error);
+    if (!obj) {
+        return -1;
+    }
+
+    json_decref(obj);
+    return 0;
+}
