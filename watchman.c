@@ -15,6 +15,12 @@
 
 #include <jansson.h>
 
+#include "bser_write.h"
+#include "proto.h"
+
+
+static int use_bser_encoding = 0;
+
 /* It's safe to have a small buffer here because watchman's socket name
  * is guaranteed to be under 108 bytes (see sockaddr_un).  The JSON only has
  * sockname and version fields.
@@ -51,6 +57,11 @@ static struct watchman_connection *
 watchman_sock_connect(const char *sockname, struct timeval timeout, struct watchman_error *error)
 {
     struct sockaddr_un addr = { };
+
+    use_bser_encoding = getenv("GIT_USE_JSON_PROTOCOL") == NULL;
+        if (getenv("GIT_TRACE_WATCHMAN") != NULL) {
+            fprintf(stderr, "Using bser encoding: %s\n", use_bser_encoding ? "yes" : "no");
+    }
 
     int fd;
     if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
@@ -215,7 +226,7 @@ static int block_on_read(int fd, struct timeval *timeout)
  * EOF, or the data that has been read can be parsed as JSON.  In the
  * event of a timeout or read error, returns NULL.
  */
-static json_t *read_json_with_timeout(int fd, char* buf, size_t bytes, struct timeval timeout)
+static proto_t read_with_timeout(int fd, char* buf, size_t bytes, struct timeval timeout)
 {
     size_t read_so_far = 0;
     ssize_t bytes_read = 0;
@@ -224,34 +235,40 @@ static json_t *read_json_with_timeout(int fd, char* buf, size_t bytes, struct ti
         if (timeout.tv_sec || timeout.tv_usec) {
             if (timeout.tv_sec < 0 || timeout.tv_usec < 0) {
                 /* Timeout */
-                return NULL;
+                return proto_null();
             }
 
             if (1 == block_on_read(fd, &timeout)) {
                 bytes_read = read(fd, buf, bytes - read_so_far);
             } else {
-                return NULL; /* timeout or error */
+                return proto_null(); /* timeout or error */
             }
         } else {
             bytes_read = read(fd, buf, bytes - read_so_far);
         }
         if (bytes_read < 0) {
-            return NULL;
+            return proto_null();
         }
         if (bytes_read == 0) {
             /* EOF, but we couldn't parse the JSON we have so far */
-            return NULL;
+            return proto_null();
         }
         read_so_far += bytes_read;
 
         /* try to parse this */
         buf[read_so_far] = 0;
-        json_error_t jerror;
-        json_t *json = json_loads(buf, JSON_DISABLE_EOF_CHECK, &jerror);
-        if (json)
-            return json;
+        proto_t proto;
+        if (use_bser_encoding) {
+            bser_t* bser = bser_parse((uint8_t*)buf, read_so_far, NULL);
+            proto = proto_from_bser(bser);
+        } else {
+            json_error_t jerror;
+            json_t* json = json_loads(buf, JSON_DISABLE_EOF_CHECK, &jerror);
+                        proto = proto_from_json(json);
+        }
+        return proto;
     }
-    return NULL;
+    return proto_null();
 }
 
 /*
@@ -278,38 +295,38 @@ watchman_connect(struct timeval timeout, struct watchman_error *error)
 
     char buf[WATCHMAN_GET_SOCKNAME_MAX + 1];
 
-    json_t *json = read_json_with_timeout(p->fd, buf, WATCHMAN_GET_SOCKNAME_MAX, timeout);
+    proto_t proto = read_with_timeout(p->fd, buf, WATCHMAN_GET_SOCKNAME_MAX, timeout);
 
     if (watchman_pclose(error, p)) {
         goto done;
     }
-    if (!json) {
+    if (proto_is_null(proto)) {
         watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
-                     "Got bad or no JSON from watchman get-sockname");
+                     "Got bad or no JSON/BSER from watchman get-sockname");
         goto done;
     }
-    if (!json_is_object(json)) {
+    if (!proto_is_object(proto)) {
         watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
-                     "Got bad JSON from watchman get-sockname: object expected");
-        goto bad_json;
+                     "Got bad JSON/BSER from watchman get-sockname: object expected");
+        goto bad_proto;
     }
-    json_t *sockname_obj = json_object_get(json, "sockname");
-    if (!sockname_obj) {
+    proto_t sockname_obj = proto_object_get(proto, "sockname");
+    if (proto_is_null(sockname_obj)) {
         watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
-                     "Got bad JSON from watchman get-sockname: "
+                     "Got bad JSON/BSER from watchman get-sockname: "
                      "sockname element expected");
-        goto bad_json;
+        goto bad_proto;
     }
-    if (!json_is_string(sockname_obj)) {
+    if (!proto_is_string(sockname_obj)) {
         watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
-                     "Got bad JSON from watchman get-sockname:"
+                     "Got bad JSON/BSER from watchman get-sockname:"
                      " sockname is not string");
-        goto bad_json;
+        goto bad_proto;
     }
-    const char *sockname = json_string_value(sockname_obj);
+    const char *sockname = proto_strdup(sockname_obj);
     conn = watchman_sock_connect(sockname, timeout, error);
-bad_json:
-    json_decref(json);
+bad_proto:
+    proto_decref(proto);
 done:
     return conn;
 }
@@ -326,8 +343,13 @@ watchman_send_simple_command(struct watchman_connection *conn,
     while ((arg = va_arg(argptr, char *))) {
         json_array_append_new(cmd_array, json_string(arg));
     }
-    int json_result = json_dumpf(cmd_array, conn->fp, JSON_COMPACT);
-    if (json_result) {
+    if (use_bser_encoding) {
+        result = bser_write_to_file(cmd_array, conn->fp) == 0;
+    } else {
+        result = json_dumpf(cmd_array, conn->fp, JSON_COMPACT);
+        fputc('\n', conn->fp);
+    }
+    if (result) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             watchman_err(error, WATCHMAN_ERR_TIMEOUT,
                          "Timeout sending simple watchman command");
@@ -337,18 +359,16 @@ watchman_send_simple_command(struct watchman_connection *conn,
         }
         result = 1;
     }
-    fputc('\n', conn->fp);
 
     json_decref(cmd_array);
     return result;
 }
 
-static json_t *
+static proto_t
 watchman_read_with_timeout(struct watchman_connection *conn, struct timeval *timeout, struct watchman_error *error)
 {
-    json_error_t jerror;
-    int flags = JSON_DISABLE_EOF_CHECK;
-    json_t *result;
+    proto_t result;
+      json_error_t jerror;
 
     int ret = block_on_read(fileno(conn->fp), timeout);
     if (ret == -1) {
@@ -356,8 +376,25 @@ watchman_read_with_timeout(struct watchman_connection *conn, struct timeval *tim
                      "Error encountered blocking on watchman");
     }
 
-    result = json_loadf(conn->fp, flags, &jerror);
-    if (!result) {
+    if (use_bser_encoding) {
+        bser_t* bser = bser_parse_from_file(conn->fp, NULL);
+        result = proto_from_bser(bser);
+    } else {
+        json_t* json = json_loadf(conn->fp, JSON_DISABLE_EOF_CHECK, &jerror);
+        result = proto_from_json(json);
+        if (fgetc(conn->fp) != '\n') {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                watchman_err(error, WATCHMAN_ERR_TIMEOUT,
+                             "Timeout reading EOL from watchman");
+            } else {
+                watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
+                             "No newline at end of reply");
+            }
+            json_decref(json);
+            return proto_null();
+        }
+    }
+    if (proto_is_null(result)) {
         if (errno == EAGAIN) {
             watchman_err(error, WATCHMAN_ERR_TIMEOUT,
                          "Timeout:EAGAIN reading from watchman.");
@@ -370,23 +407,12 @@ watchman_read_with_timeout(struct watchman_connection *conn, struct timeval *tim
                          "Can't parse result from watchman: %s",
                          jerror.text);
         }
-        return NULL;
-    }
-    if (fgetc(conn->fp) != '\n') {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            watchman_err(error, WATCHMAN_ERR_TIMEOUT,
-                         "Timeout reading EOL from watchman");
-        } else {
-            watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
-                         "No newline at end of reply");
-        }
-        json_decref(result);
-        return NULL;
+        return proto_null();
     }
     return result;
 }
 
-static json_t *
+static proto_t
 watchman_read(struct watchman_connection *conn, struct watchman_error *error)
 {
   return watchman_read_with_timeout(conn, NULL, error);
@@ -396,29 +422,29 @@ static int
 watchman_read_and_handle_errors(struct watchman_connection *conn,
                                 struct watchman_error *error)
 {
-    json_t *obj = watchman_read(conn, error);
-    if (!obj) {
+    proto_t obj = watchman_read(conn, error);
+    if (proto_is_null(obj)) {
         return 1;
     }
-    if (!json_is_object(obj)) {
-        char *bogus_json_text = json_dumps(obj, 0);
+    if (!proto_is_object(obj)) {
+        char *bogus_text = proto_dumps(obj, 0);
         watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
                      "Got non-object result from watchman : %s",
-                     bogus_json_text);
-        free(bogus_json_text);
-        json_decref(obj);
+                     bogus_text);
+        free(bogus_text);
+        proto_decref(obj);
         return 1;
     }
-    json_t *error_json = json_object_get(obj, "error");
-    if (error_json) {
+    proto_t error_node = proto_object_get(obj, "error");
+    if (!proto_is_null(error_node)) {
         watchman_err(error, WATCHMAN_ERR_OTHER,
                      "Got error result from watchman : %s",
-                     json_string_value(error_json));
-        json_decref(obj);
+                     proto_strdup(error_node));
+        proto_decref(obj);
         return 1;
     }
 
-    json_decref(obj);
+    proto_decref(obj);
     return 0;
 }
 
@@ -675,9 +701,9 @@ fields_to_json(int fields)
     return result;
 }
 
-#define JSON_ASSERT(cond, condarg, msg)                                 \
+#define PROTO_ASSERT(cond, condarg, msg)                                 \
     if (!cond(condarg)) {                                               \
-        char *dump = json_dumps(condarg, 0);                            \
+        char *dump = proto_dumps(condarg, 0);                            \
         watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN, msg, dump);   \
         free(dump);                                                     \
         goto done;                                                      \
@@ -693,25 +719,25 @@ watchman_watch_list(struct watchman_connection *conn,
         return NULL;
     }
 
-    json_t *obj = watchman_read(conn, error);
-    if (!obj) {
+    proto_t obj = watchman_read(conn, error);
+    if (proto_is_null(obj)) {
         return NULL;
     }
-    JSON_ASSERT(json_is_object, obj, "Got bogus value from watch-list %s");
-    json_t *roots = json_object_get(obj, "roots");
-    JSON_ASSERT(json_is_array, roots, "Got bogus value from watch-list %s");
+    PROTO_ASSERT(proto_is_object, obj, "Got bogus value from watch-list %s");
+    proto_t roots = proto_object_get(obj, "roots");
+    PROTO_ASSERT(proto_is_array, roots, "Got bogus value from watch-list %s");
 
     res = malloc(sizeof(*res));
-    int nr = json_array_size(roots);
+    int nr = proto_array_size(roots);
     res->nr = 0;
     res->roots = calloc(nr, sizeof(*res->roots));
     int i;
     for (i = 0; i < nr; ++i) {
-        json_t *root = json_array_get(roots, i);
-        JSON_ASSERT(json_is_string, root,
+        proto_t root = proto_array_get(roots, i);
+        PROTO_ASSERT(proto_is_string, root,
                     "Got non-string root from watch-list %s");
         res->nr++;
-        res->roots[i] = strdup(json_string_value(root));
+        res->roots[i] = proto_strdup(root);
     }
     result = res;
     res = NULL;
@@ -719,44 +745,50 @@ done:
     if (res) {
         watchman_free_watch_list(res);
     }
-    json_decref(obj);
+    proto_decref(obj);
     return result;
 }
 
-#define WRITE_BOOL_STAT(stat, statobj, attr)                            \
-    json_t *attr = json_object_get(statobj, #attr);                     \
-    if (attr) {                                                         \
-        JSON_ASSERT(json_is_boolean, attr, #attr " is not boolean: %s");\
-        stat->attr = json_is_true(attr);                                \
+#define WRITE_BOOL_STAT(stat, statobj, attr)                               \
+    proto_t attr = proto_object_get(statobj, #attr);                       \
+    if (!proto_is_null(attr)) {                                            \
+        PROTO_ASSERT(proto_is_boolean, attr, #attr " is not boolean: %s"); \
+        stat->attr = proto_is_true(attr);                                  \
     }
 
-#define WRITE_INT_STAT(stat, statobj, attr)                             \
-    json_t *attr = json_object_get(statobj, #attr);                     \
-    if (attr) {                                                         \
-        JSON_ASSERT(json_is_integer, attr, #attr " is not an int: %s"); \
-        stat->attr = json_integer_value(attr);                          \
+#define WRITE_INT_STAT(stat, statobj, attr)                               \
+    proto_t attr = proto_object_get(statobj, #attr);                      \
+    if (!proto_is_null(attr)) {                                           \
+        PROTO_ASSERT(proto_is_integer, attr, #attr " is not an int: %s"); \
+        stat->attr = proto_integer_value(attr);                           \
     }
 
-#define WRITE_STR_STAT(stat, statobj, attr)                             \
-    json_t *attr = json_object_get(statobj, #attr);                     \
-    if (attr) {                                                         \
-        JSON_ASSERT(json_is_string, attr, #attr " is not a string: %s");\
-        stat->attr = strdup(json_string_value(attr));                   \
+#define WRITE_STR_STAT(stat, statobj, attr)                                \
+    proto_t attr = proto_object_get(statobj, #attr);                       \
+    if (!proto_is_null(attr)) {                                            \
+        PROTO_ASSERT(proto_is_string, attr, #attr " is not a string: %s"); \
+        stat->attr = proto_strdup(attr);                                   \
     }
 
 #define WRITE_FLOAT_STAT(stat, statobj, attr)                           \
-    json_t *attr = json_object_get(statobj, #attr);                     \
-    if (attr) {                                                         \
-        JSON_ASSERT(json_is_real, attr, #attr " is not a float: %s");   \
-        stat->attr = json_real_value(attr);                             \
+    proto_t attr = proto_object_get(statobj, #attr);                    \
+    if (!proto_is_null(attr)) {                                         \
+        PROTO_ASSERT(proto_is_real, attr, #attr " is not a float: %s"); \
+        stat->attr = proto_real_value(attr);                            \
     }
 
 static int
 watchman_send(struct watchman_connection *conn,
               json_t *query, struct watchman_error *error)
 {
-    int json_result = json_dumpf(query, conn->fp, JSON_COMPACT);
-    if (json_result) {
+    int result;
+    if (use_bser_encoding) {
+        result = bser_write_to_file(query, conn->fp) == 0;
+    } else {
+        result = json_dumpf(query, conn->fp, JSON_COMPACT);
+        fputc('\n', conn->fp);
+    }
+    if (result) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             watchman_err(error, WATCHMAN_ERR_TIMEOUT,
                          "Timeout sending to watchman");
@@ -768,7 +800,6 @@ watchman_send(struct watchman_connection *conn,
         }
         return 1;
     }
-    fputc('\n', conn->fp);
     return 0;
 }
 
@@ -794,17 +825,17 @@ watchman_clock(struct watchman_connection *conn,
         return NULL;
     }
 
-    json_t *obj = watchman_read(conn, error);
-    if (!obj) {
+    proto_t obj = watchman_read(conn, error);
+    if (proto_is_null(obj)) {
         return NULL;
     }
-    JSON_ASSERT(json_is_object, obj, "Got bogus value from clock %s");
-    json_t *clock = json_object_get(obj, "clock");
-    JSON_ASSERT(json_is_string, clock, "Bad clock %s");
-    result = strdup(json_string_value(clock));
+    PROTO_ASSERT(proto_is_object, obj, "Got bogus value from clock %s");
+    proto_t clock = proto_object_get(obj, "clock");
+    PROTO_ASSERT(proto_is_string, clock, "Bad clock %s");
+    result = proto_strdup(clock);
 
 done:
-    json_decref(obj);
+    proto_decref(obj);
     return result;
 }
 
@@ -821,44 +852,44 @@ watchman_query_json(struct watchman_connection *conn,
         return NULL;
     }
     /* parse the result */
-    json_t *obj = watchman_read_with_timeout(conn, timeout, error);
-    if (!obj) {
+    proto_t obj = watchman_read_with_timeout(conn, timeout, error);
+    if (proto_is_null(obj)) {
         return NULL;
     }
-    JSON_ASSERT(json_is_object, obj, "Failed to send watchman query %s");
+    PROTO_ASSERT(proto_is_object, obj, "Failed to send watchman query %s");
 
-    json_t *jerror = json_object_get(obj, "error");
-    if (jerror) {
+    proto_t jerror = proto_object_get(obj, "error");
+    if (!proto_is_null(jerror)) {
         watchman_err(error, WATCHMAN_ERR_WATCHMAN_REPORTED,
                      "Error result from watchman: %s",
-                     json_string_value(jerror));
+                     proto_strdup(jerror));
         goto done;
     }
 
     res = calloc(1, sizeof(*res));
 
-    json_t *files = json_object_get(obj, "files");
-    JSON_ASSERT(json_is_array, files, "Bad files %s");
+    proto_t files = proto_object_get(obj, "files");
+    PROTO_ASSERT(proto_is_array, files, "Bad files %s");
 
-    int nr = json_array_size(files);
+    int nr = proto_array_size(files);
     res->stats = calloc(nr, sizeof(*res->stats));
 
     int i;
     for (i = 0; i < nr; ++i) {
         struct watchman_stat *stat = res->stats + i;
-        json_t *statobj = json_array_get(files, i);
-        if (json_is_string(statobj)) {
+        proto_t statobj = proto_array_get(files, i);
+        if (proto_is_string(statobj)) {
             /* then hopefully we only requested names */
-            stat->name = strdup(json_string_value(statobj));
+            stat->name = proto_strdup(statobj);
             res->nr++;
             continue;
         }
 
-        JSON_ASSERT(json_is_object, statobj, "must be object: %s");
+        PROTO_ASSERT(proto_is_object, statobj, "must be object: %s");
 
-        json_t *name = json_object_get(statobj, "name");
-        JSON_ASSERT(json_is_string, name, "name must be string: %s");
-        stat->name = strdup(json_string_value(name));
+        proto_t name = proto_object_get(statobj, "name");
+        PROTO_ASSERT(proto_is_string, name, "name must be string: %s");
+        stat->name = proto_strdup(name);
 
         WRITE_BOOL_STAT(stat, statobj, exists);
         WRITE_INT_STAT(stat, statobj, ctime);
@@ -885,24 +916,24 @@ watchman_query_json(struct watchman_connection *conn,
 
         /* the one we have to do manually because we don't
          * want to use the name "new" */
-        json_t *newer = json_object_get(statobj, "new");
-        if (newer) {
-            stat->newer = json_is_true(newer);
+        proto_t newer = proto_object_get(statobj, "new");
+        if (!proto_is_null(newer)) {
+            stat->newer = proto_is_true(newer);
         }
         res->nr++;
     }
 
-    json_t *version = json_object_get(obj, "version");
-    JSON_ASSERT(json_is_string, version, "Bad version %s");
-    res->version = strdup(json_string_value(version));
+    proto_t version = proto_object_get(obj, "version");
+    PROTO_ASSERT(proto_is_string, version, "Bad version %s");
+    res->version = proto_strdup(version);
 
-    json_t *clock = json_object_get(obj, "clock");
-    JSON_ASSERT(json_is_string, clock, "Bad clock %s");
-    res->clock = strdup(json_string_value(clock));
+    proto_t clock = proto_object_get(obj, "clock");
+    PROTO_ASSERT(proto_is_string, clock, "Bad clock %s");
+    res->clock = proto_strdup(clock);
 
-    json_t *fresh = json_object_get(obj, "is_fresh_instance");
-    JSON_ASSERT(json_is_boolean, fresh, "Bad is_fresh_instance %s");
-    res->is_fresh_instance = json_is_true(fresh);
+    proto_t fresh = proto_object_get(obj, "is_fresh_instance");
+    PROTO_ASSERT(proto_is_boolean, fresh, "Bad is_fresh_instance %s");
+    res->is_fresh_instance = proto_is_true(fresh);
 
     result = res;
     res = NULL;
@@ -910,7 +941,7 @@ done:
     if (res) {
         watchman_free_query_result(res);
     }
-    json_decref(obj);
+    proto_decref(obj);
     return result;
 }
 
@@ -1376,22 +1407,22 @@ watchman_version(struct watchman_connection *conn,
         return -1;
     }
 
-    json_t *obj = watchman_read(conn, error);
-    if (!obj) {
+    proto_t obj = watchman_read(conn, error);
+    if (proto_is_null(obj)) {
         return -1;
     }
-    JSON_ASSERT(json_is_object, obj, "Got bogus value from version %s");
-    json_t *version_field = json_object_get(obj, "version");
-    JSON_ASSERT(json_is_string, version_field, "Bad version %s");
-    result = json_string_value(version_field);
+    PROTO_ASSERT(proto_is_object, obj, "Got bogus value from version %s");
+    proto_t version_field = proto_object_get(obj, "version");
+    PROTO_ASSERT(proto_is_string, version_field, "Bad version %s");
+    result = proto_strdup(version_field);
 
     int count = sscanf(result, "%d.%d.%d", &version->major,
                        &version->minor, &version->micro);
-    json_decref(obj);
+    proto_decref(obj);
     return count == 3 ? 0 : -1;
 
 done:
-    json_decref(obj);
+    proto_decref(obj);
     return -1;
 }
 
@@ -1409,11 +1440,11 @@ watchman_shutdown_server(struct watchman_connection *conn,
         return -1;
     }
 
-    json_t *obj = watchman_read(conn, error);
-    if (!obj) {
+    proto_t obj = watchman_read(conn, error);
+    if (proto_is_null(obj)) {
         return -1;
     }
 
-    json_decref(obj);
+    proto_decref(obj);
     return 0;
 }

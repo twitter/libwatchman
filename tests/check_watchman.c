@@ -97,11 +97,23 @@ START_TEST(test_watchman_connect)
     watched = watchman_watch_list(conn, &error);
     ck_assert_msg(watched != NULL, error.message);
 
+    struct stat buf;
+    int status = lstat(test_dir, &buf);
+    ck_assert_msg(status == 0, error.message);
+    ino_t inode = buf.st_ino;
+
     int found = 0;
     int i;
     for (i = 0; i < watched->nr; ++i) {
         if (!strcmp(watched->roots[i], test_dir)) {
             found = 1;
+            break;
+        } else {
+            /* Different paths may refer to the same directory -- check the inode */
+            if ((lstat(watched->roots[i], &buf) == 0) && buf.st_ino == inode) {
+                found = 1;
+                break;
+            }
         }
     }
     ck_assert_msg(found, "Dir we just started watching is not in watch-list");
