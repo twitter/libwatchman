@@ -1,0 +1,33 @@
+[
+    {
+        "name": "Luke Skywalker",
+        "age": 19,
+        "force_user": true,
+        "weapons": [
+            "lightsaber",
+            "blaster",
+            "force"
+        ],
+        "occupation": "jedi"
+    },
+    {
+        "name": "Han Solo",
+        "age": 27,
+        "force_user": false,
+        "weapons": [
+            "blaster",
+            "smirk"
+        ],
+        "occupation": "nerf herder"
+    },
+    {
+        "name": "Leia Organa",
+        "age": 18,
+        "force_user": false,
+        "weapons": [
+            "blaster",
+            "wit"
+        ],
+        "occupation": "princess"
+    }
+]
