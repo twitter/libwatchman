@@ -32,5 +32,10 @@ stamp-h1
 tests/check_watchman
 tests/check_watchman.log
 tests/check_watchman.trs
+tests/check_bser
+tests/check_bser.log
+tests/check_bser.trs
 tests/test-suite.log
 test-driver
+tests/json2bser
+tests/bser2json
