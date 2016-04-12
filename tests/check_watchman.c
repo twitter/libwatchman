@@ -164,6 +164,7 @@ START_TEST(test_watchman_watch)
     /* we expect to get nothing back from this one */
     struct watchman_query_result *result =
         watchman_do_query(conn, test_dir, NULL, since, &error);
+    ck_assert_msg(result != NULL, error.message);
     ck_assert_int_eq(0, result->nr);
     char *clock = strdup(result->clock);
     watchman_free_query_result(result);
