@@ -350,10 +350,20 @@ watchman_read_with_timeout(struct watchman_connection *conn, struct timeval *tim
     int flags = JSON_DISABLE_EOF_CHECK;
     json_t *result;
 
-    int ret = block_on_read(fileno(conn->fp), timeout);
+    int ret = 1;
+
+    if (!timeout || timeout->tv_sec || timeout->tv_usec)
+        ret = block_on_read(fileno(conn->fp), timeout);
     if (ret == -1) {
         watchman_err(error, WATCHMAN_ERR_WATCHMAN_BROKEN,
                      "Error encountered blocking on watchman");
+        return NULL;
+    }
+
+    if (ret != 1) {
+        watchman_err(error, WATCHMAN_ERR_TIMEOUT,
+                     "timed out waiting for watchman");
+        return NULL;
     }
 
     result = json_loadf(conn->fp, flags, &jerror);
