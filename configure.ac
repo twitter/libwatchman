@@ -12,6 +12,9 @@ AM_PROG_CC_C_O
 AM_PROG_AS
 
 AC_CHECK_HEADER([check.h], [], AC_MSG_ERROR([unable to find check]))
+# NOTE: If you get an error about check.h, install "check" and get an
+# error about AM_PATH_CHECK() you need to re-run autogen.sh, since the
+# AM_PATH_CHECK comes with the "check" package.
 AM_PATH_CHECK([0.9.4])
 
 LT_INIT()
