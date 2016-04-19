@@ -1,0 +1,8 @@
+{
+    "foo" : [ 1, 288, 4 ],
+    "bar" : { "baz" : "bros" },
+    "zoo" : "keep",
+    "bozo" : true,
+    "brozo" : null,
+    "bono" : 42
+}
