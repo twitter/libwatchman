@@ -209,9 +209,9 @@ struct watchman_expression {
 };
 
 struct watchman_version {
-	int major;
-	int minor;
-	int micro;
+    int major;
+    int minor;
+    int micro;
 };
 
 struct watchman_connection *
