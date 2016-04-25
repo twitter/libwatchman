@@ -65,7 +65,10 @@ enum watchman_error_code {
     WATCHMAN_ERR_WATCHMAN_REPORTED,
     /* We only want to have codes for the errors that
      * callers might find interesting*/
-    WATCHMAN_ERR_OTHER
+    WATCHMAN_ERR_OTHER,
+    /* Possibly in addition to another error, we couldn't get back to
+     * our initial working directory */
+    WATCHMAN_ERR_CWD = 2048
 };
 
 struct watchman_error {
