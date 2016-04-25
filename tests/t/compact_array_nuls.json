@@ -1,0 +1,21 @@
+[
+    {
+        "name" : "Luke Skywalker",
+        "age" : 19,
+        "force_user" : true,
+        "weapons" :
+            [ "lightsaber", "blaster", "force" ],
+        "occupation" : "jedi"
+    },
+    {
+        "name" : "Han Solo",
+        "age" : 27,
+        "force_user" : false,
+        "weapons" : [ "blaster", "smirk" ]
+    },
+    {
+        "name" : "Leia Organa",
+        "gender" : "f",
+        "occupation" : "princess"
+    }
+]
