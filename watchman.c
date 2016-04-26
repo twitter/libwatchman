@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
@@ -51,31 +52,148 @@ watchman_err(struct watchman_error *error, enum watchman_error_code code,
     va_end(argptr);
 }
 
+static int unix_stream_socket(void)
+{
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    return fd;
+}
+
+static int chdir_len(const char *orig, int len)
+{
+    char *path = malloc(len + 1);
+    memcpy(path, orig, len);
+    path[len] = 0;
+    int r = chdir(path);
+    free(path);
+    return r;
+}
+
+struct unix_sockaddr_context {
+    char *orig_dir;
+};
+
+static char *getcwd_alloc(void)
+{
+    int buflen = PATH_MAX;
+    char *buf = NULL;
+
+    while (1) {
+        buf = realloc(buf, buflen);
+        if (getcwd(buf, buflen)) {
+            break;
+        }
+
+        if (errno != ERANGE) {
+            return NULL;
+        }
+        buflen *= 2;
+    }
+
+    return buf;
+}
+
+static int unix_sockaddr_init(struct sockaddr_un *sa, const char *path,
+                              struct unix_sockaddr_context *ctx)
+{
+    size_t size = strlen(path) + 1;
+
+    ctx->orig_dir = NULL;
+    if (size > sizeof(sa->sun_path)) {
+        const char *slash = strrchr(path, '/');
+        const char *dir;
+
+        if (!slash) {
+            errno = ENAMETOOLONG;
+            return -1;
+        }
+
+        dir = path;
+        path = slash + 1;
+        size = strlen(path) + 1;
+        if (size > sizeof(sa->sun_path)) {
+            errno = ENAMETOOLONG;
+            return -1;
+        }
+        char *cwd = getcwd_alloc();
+        if (!cwd) {
+            return -1;
+        }
+        ctx->orig_dir = cwd;
+        if (chdir_len(dir, slash - dir) < 0) {
+            free(cwd);
+            return -1;
+        }
+    }
+
+    memset(sa, 0, sizeof(*sa));
+    sa->sun_family = AF_UNIX;
+    memcpy(sa->sun_path, path, size);
+    return 0;
+}
+
+static int unix_sockaddr_cleanup(struct unix_sockaddr_context *ctx, struct watchman_error *error)
+{
+    int ret = 0;
+    if (!ctx->orig_dir) {
+        return 0;
+    }
+    /*
+     * If we fail, we have moved the cwd of the whole process, which
+     * could confuse calling code.  But we don't want to just die, because
+     * libraries shouldn't do that.  So we'll return an error but be
+     * sad about it.
+     */
+    if (chdir(ctx->orig_dir) < 0) {
+        watchman_err(error, WATCHMAN_ERR_CWD,
+                     "unable to restore original working directory");
+        ret = -1;
+    }
+    free(ctx->orig_dir);
+    return ret;
+}
+
+static int unix_stream_connect(const char *path, struct watchman_error *error)
+{
+    struct sockaddr_un sa;
+    struct unix_sockaddr_context ctx;
+
+    if (unix_sockaddr_init(&sa, path, &ctx) < 0) {
+        return -1;
+    }
+    int fd = unix_stream_socket();
+    if (fd < 0) {
+        return -1;
+    }
+    if (connect(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+        watchman_err(error, WATCHMAN_ERR_CONNECT, "Connect error %s",
+                     strerror(errno));
+
+        if (unix_sockaddr_cleanup(&ctx, error)) {
+            error->code |= WATCHMAN_ERR_CWD;
+        }
+        close(fd);
+        return -1;
+    }
+    if (unix_sockaddr_cleanup(&ctx, error)) {
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
 
 static struct watchman_connection *
 watchman_sock_connect(const char *sockname, struct timeval timeout, struct watchman_error *error)
 {
-    struct sockaddr_un addr = { };
-
     use_bser_encoding = getenv("LIBWATCHMAN_USE_JSON_PROTOCOL") == NULL;
         if (getenv("LIBWATCHMAN_TRACE_WATCHMAN") != NULL) {
             fprintf(stderr, "Using bser encoding: %s\n", use_bser_encoding ? "yes" : "no");
     }
 
     int fd;
-    if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-        watchman_err(error, WATCHMAN_ERR_OTHER, "Socket error %s",
-                     strerror(errno));
-        return NULL;
-    }
 
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, sockname, sizeof(addr.sun_path) - 1);
-
-    /* We don't need to worry about connect hanging, because it's a
-     * Unix Domain Socket, and connect never hangs on those */
-    if (connect(fd, (struct sockaddr *) &addr, sizeof(addr)) == -1) {
-        close(fd);
+    error->message = NULL;
+    fd = unix_stream_connect(sockname, error);
+    if (fd < 0 && !error->message) {
         watchman_err(error, WATCHMAN_ERR_CONNECT, "Connect error %s",
                      strerror(errno));
         return NULL;
