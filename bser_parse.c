@@ -219,7 +219,7 @@ parse_string(bser_t* fill, bser_buffer_t* buffer)
      new_unparsed(buffer, &length);
      if (bser_is_integer(&length)) {
         size_t sz = (size_t)bser_integer_value(&length);
-        const char* chars = (const char*)&buffer->data[buffer->cursor];
+        const char* chars = (const char*)buffer->data + buffer->cursor;
         buffer->cursor += sz;
         bser_new_string(chars, sz, fill);
      } else {
@@ -269,7 +269,7 @@ bser_parse_generic(bser_t* fill, bser_buffer_t* buffer)
     } else {
         uint8_t* as_int = buffer->data;
         uint8_t tag = as_int[buffer->cursor++];
-        void* data = &buffer->data[buffer->cursor];
+        void* data = (char *)buffer->data + buffer->cursor;
 
         switch (tag) {
             case BSER_TAG_ARRAY:
