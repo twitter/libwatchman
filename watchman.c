@@ -185,7 +185,7 @@ static struct watchman_connection *
 watchman_sock_connect(const char *sockname, struct timeval timeout, struct watchman_error *error)
 {
     use_bser_encoding = getenv("LIBWATCHMAN_USE_JSON_PROTOCOL") == NULL;
-        if (getenv("LIBWATCHMAN_TRACE_WATCHMAN") != NULL) {
+    if (getenv("LIBWATCHMAN_TRACE_WATCHMAN") != NULL) {
             fprintf(stderr, "Using bser encoding: %s\n", use_bser_encoding ? "yes" : "no");
     }
 
