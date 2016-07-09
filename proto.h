@@ -122,7 +122,12 @@ proto_dumps(proto_t p, int flags)
     json_t* json = p.u.json;
     char* result;
     if (p.type == PROTO_BSER) {
-        json = bser2json(p.u.bser);
+        json_error_t err;
+        json = bser2json(p.u.bser, &err);
+        if (json == NULL) {
+            json = json_string(err.text);
+            flags |= JSON_ENCODE_ANY;
+        }
     }
     result = json_dumps(json, flags);
     if (p.type == PROTO_BSER) {

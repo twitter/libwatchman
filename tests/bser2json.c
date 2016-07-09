@@ -10,10 +10,11 @@ int main(int argc, char* argv[]) {
     json_object_seed(1); /* make test results repeatable */
 #endif
     bser_t bser;
+    json_error_t err;
     bser_parse_from_file(stdin, &bser);
-    json_t* root = bser2json(&bser);
+    json_t* root = bser2json(&bser, &err);
     if (root == NULL) {
-        fprintf(stderr, "Could not convert BSER\n");
+        fprintf(stderr, "Could not convert BSER: %s\n", err.text);
     } else {
         json_dumpf(root, stdout, JSON_INDENT(4) | JSON_ENCODE_ANY);
         fprintf(stdout, "\n");
