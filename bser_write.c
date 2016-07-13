@@ -380,7 +380,7 @@ buffer_stream_write(stream_t* s, const void* data, size_t nb)
     struct buffer_stream* stream = (struct buffer_stream*)s;
 
     if (stream->buffer.cursor + nb <= stream->buffer.datalen) {
-        memcpy(&stream->buffer.data[stream->buffer.cursor], data, nb);
+        memcpy(stream->buffer.data + stream->buffer.cursor, data, nb);
         stream->buffer.cursor += nb;
         result = nb;
     }
