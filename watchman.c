@@ -375,7 +375,7 @@ static proto_t read_with_timeout(int fd, char* buf, size_t bytes, struct timeval
         /* try to parse this */
         buf[read_so_far] = 0;
         proto_t proto;
-        if (use_bser_encoding) {
+        if (buf[0] <= 0x0b) {
             bser_t* bser = bser_parse_buffer((uint8_t*)buf, read_so_far, NULL);
             proto = proto_from_bser(bser);
         } else {
