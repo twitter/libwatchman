@@ -20,12 +20,50 @@
 #include "proto.h"
 
 static int use_bser_encoding = 0;
+static FILE* error_handle = NULL;
 
 /* It's safe to have a small buffer here because watchman's socket name
  * is guaranteed to be under 108 bytes (see sockaddr_un).  The JSON only has
  * sockname and version fields.
 */
 #define WATCHMAN_GET_SOCKNAME_MAX 1024
+
+void
+watchman_set_error_handle(FILE* fp) {
+    error_handle = fp;
+}
+
+static void do_output(const char* category, const char *msg, va_list params) {
+    if (error_handle != NULL) {
+        fprintf(error_handle, "%s: ", category);
+        vfprintf(error_handle, msg, params);
+        fprintf(error_handle, "\n");
+    }
+}
+
+static void trace(const char *msg, ...) {
+    if (getenv("LIBWATCHMAN_TRACE_WATCHMAN") != NULL) {
+        va_list params;
+        va_start(params, msg);
+        do_output("trace", msg, params);
+        va_end(params);
+    }
+}
+
+static void warning(const char* msg, ...) {
+    va_list params;
+    va_start(params, msg);
+    do_output("warning", msg, params);
+    va_end(params);
+}
+
+static void error(const char* msg, ...) {
+    va_list params;
+    va_start(params, msg);
+    do_output("error", msg, params);
+    va_end(params);
+}
+
 
 static void watchman_err(struct watchman_error *error,
                          enum watchman_error_code code,
@@ -42,6 +80,7 @@ watchman_err(struct watchman_error *error, enum watchman_error_code code,
     va_start(argptr, message);
     char c;
     int len = vsnprintf(&c, 1, message, argptr);
+    warning(message, argptr);
     va_end(argptr);
 
     error->message = malloc(len + 1);
@@ -185,9 +224,7 @@ static struct watchman_connection *
 watchman_sock_connect(const char *sockname, struct timeval timeout, struct watchman_error *error)
 {
     use_bser_encoding = getenv("LIBWATCHMAN_USE_JSON_PROTOCOL") == NULL;
-    if (getenv("LIBWATCHMAN_TRACE_WATCHMAN") != NULL) {
-            fprintf(stderr, "Using bser encoding: %s\n", use_bser_encoding ? "yes" : "no");
-    }
+    trace("Using bser encoding: %s", use_bser_encoding ? "yes" : "no");
 
     int fd;
 
@@ -237,7 +274,7 @@ struct watchman_popen {
 static const char* get_sockname_msg = "Could not run watchman get-sockname: %s";
 /* Runs watchman get-sockname and returns a FILE from which the output
  can be read. */
-static struct watchman_popen *watchman_popen_getsockname(struct watchman_error *error)
+static struct watchman_popen *watchman_popen_getsockname(struct watchman_error *err)
 {
     int pipefd[2];
     static struct watchman_popen ret = {0, 0};
@@ -251,19 +288,23 @@ static struct watchman_popen *watchman_popen_getsockname(struct watchman_error *
         goto fail;
     } else if (pid == 0) {
         if (dup2(pipefd[1], 1) < 0) {
+            error("Could not dup pipe");
             exit(WATCHMAN_EXEC_INTERNAL_ERROR);
         }
 
         int devnull_fh = open("/dev/null", O_RDWR);
         if (devnull_fh < 0) {
+           error("Could not open /dev/null");
             exit(WATCHMAN_EXEC_INTERNAL_ERROR);
         }
 
         if (dup2(devnull_fh, 2) < 0) {
+            error("Could not dup2 /dev/null");
             exit(WATCHMAN_EXEC_INTERNAL_ERROR);
         }
 
         execlp("watchman", "watchman", "get-sockname", (char *) NULL);
+        error("execlp failed");
         exit(WATCHMAN_EXEC_FAILED);
     } else {
         close(pipefd[1]);
@@ -273,7 +314,7 @@ static struct watchman_popen *watchman_popen_getsockname(struct watchman_error *
     }
 
 fail:
-    watchman_err(error, WATCHMAN_ERR_OTHER, get_sockname_msg, strerror(errno));
+    watchman_err(err, WATCHMAN_ERR_OTHER, get_sockname_msg, strerror(errno));
     return NULL;
 }
 

@@ -68,7 +68,9 @@ bser_t* bser_object_value_at(bser_t* bser, size_t index);
 /* Retrieve error message if the node is an error node */
 const char* bser_error_message(bser_t* bser);
 
-/* Convert a BSER representation into a json (jansson) representation */
-json_t* bser2json(bser_t* bser);
+/* Convert a BSER representation into a json (jansson) representation.
+ * Upon an error, NULL is returned and 'err' is filled in with the error
+ * message. */
+json_t* bser2json(bser_t* bser, json_error_t* err);
 
 #endif /* ndef LIBWATCHMAN_BSER_H */

@@ -217,6 +217,11 @@ struct watchman_version {
     int micro;
 };
 
+/**
+ * If set, errors and warnings are sent to this location
+ */
+void watchman_set_error_handle(FILE* fp);
+
 struct watchman_connection *
 watchman_connect(struct timeval timeout, struct watchman_error *error);
 int

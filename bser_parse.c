@@ -147,9 +147,8 @@ bser_parse_from_file(FILE* fp, bser_t* fill)
     uint8_t magic[2];
     int64_t size;
 
-    if (fread(magic, 1, 2, fp) != 2 ||
-        magic[0] != 0 ||
-        magic[1] != 1) {
+    int status = fread(magic, 1, 2, fp);
+    if (status != 2 || magic[0] != 0 || magic[1] != 1) {
         return new_error("Could not read bser magic values", fill);
     } else if (integer_from_file(fp, &size)) {
         return new_error("Could not read bser length", fill);

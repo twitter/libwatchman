@@ -330,8 +330,13 @@ bser_object_value_at(bser_t* bser, size_t index)
     }
 }
 
+static void fill_in_error(const char* msg, json_error_t* err) {
+    memset(err, 0, sizeof(*err));
+    strncpy(err->text, msg, JSON_ERROR_TEXT_LENGTH - 1);
+}
+
 json_t*
-bser2json(bser_t* bser)
+bser2json(bser_t* bser, json_error_t* err)
 {
     if (bser_is_integer(bser)) {
         json_int_t v = bser_integer_value(bser);
@@ -356,7 +361,11 @@ bser2json(bser_t* bser)
         size_t length = bser_array_size(bser);
         json_t* array = json_array();
         for (int i = 0; i < length; ++i) {
-            json_array_append_new(array, bser2json(bser_array_get(bser, i)));
+            json_t* elem = bser2json(bser_array_get(bser, i), err);
+            if (elem == NULL) {
+                return NULL;
+            }
+            json_array_append_new(array, elem);
         }
         return array;
     } else if (bser_is_object(bser)) {
@@ -371,12 +380,20 @@ bser2json(bser_t* bser)
                 const char* key_chars = bser_string_value(key, &key_length);
                 assert(key_chars != NULL && *key_chars != '\0');
                 char* key_dup = strndup(key_chars, key_length);
-                json_object_set_new(object, key_dup, bser2json(value));
+                json_t* field_value = bser2json(value, err);
+                if (field_value == NULL) {
+                    return NULL;
+                }
+                json_object_set_new(object, key_dup, field_value);
                 free(key_dup);
             }
         }
         return object;
+    } else if (bser_is_error(bser)) {
+        fill_in_error(bser_error_message(bser), err);
+        return NULL;
     } else {
+        fill_in_error("Unknown bser node type", err);
         return NULL;
     }
 }
