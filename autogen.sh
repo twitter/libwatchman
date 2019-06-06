@@ -298,7 +298,7 @@ if [ "x$AUTOHEADER_OPTIONS" = "x" ] ; then
     AUTOHEADER_OPTIONS=""
 fi
 if [ "x$CONFIG_GUESS_URL" = "x" ] ; then
-    CONFIG_GUESS_URL="http://git.savannah.gnu.org/gitweb/?p=gnulib.git;a=blob_plain;f=build-aux/config.guess;hb=HEAD"
+    CONFIG_GUESS_URL="https://git.savannah.gnu.org/gitweb/?p=gnulib.git;a=blob_plain;f=build-aux/config.guess;hb=HEAD"
 fi
 for arg in $ARGS ; do
     case "x$arg" in
